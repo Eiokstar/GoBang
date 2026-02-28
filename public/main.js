@@ -1,5 +1,6 @@
 const socket = io();
 const BOARD_SIZE = 15;
+const AI_TOTAL_MS = 5 * 60 * 1000;
 
 const els = {
   registerCard: document.getElementById('registerCard'),
@@ -64,35 +65,53 @@ const state = {
   turn: 'black',
   lastMove: null,
   remainingMs: {},
+  syncTurn: 'black',
+  syncAt: 0,
   currentView: 'register',
   history: [],
+  aiClock: {
+    playerMs: AI_TOTAL_MS,
+    aiMs: AI_TOTAL_MS,
+    turn: 'player',
+    turnStartAt: 0,
+  },
 };
 
 let audioContext = null;
 
+function initAudio() {
+  if (!audioContext) {
+    audioContext = new window.AudioContext();
+  }
+  if (audioContext.state === 'suspended') {
+    audioContext.resume().catch(() => {});
+  }
+}
+
+document.addEventListener('pointerdown', initAudio, { passive: true });
+
 function playStoneSound() {
   try {
-    if (!audioContext) {
-      audioContext = new window.AudioContext();
-    }
+    initAudio();
+    if (!audioContext) return;
+
     const now = audioContext.currentTime;
     const osc = audioContext.createOscillator();
     const gain = audioContext.createGain();
-
     osc.type = 'triangle';
-    osc.frequency.setValueAtTime(520, now);
-    osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
+    osc.frequency.setValueAtTime(420, now);
+    osc.frequency.exponentialRampToValueAtTime(260, now + 0.09);
 
     gain.gain.setValueAtTime(0.001, now);
-    gain.gain.exponentialRampToValueAtTime(0.14, now + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.12, now + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
 
     osc.connect(gain);
     gain.connect(audioContext.destination);
     osc.start(now);
-    osc.stop(now + 0.11);
-  } catch (e) {
-    // ignore audio errors
+    osc.stop(now + 0.12);
+  } catch {
+    // ignore
   }
 }
 
@@ -100,39 +119,35 @@ function goToView(view, pushHistory = true) {
   Object.values(views).forEach((card) => card.classList.add('hidden'));
   views[view].classList.remove('hidden');
 
-  if (pushHistory && state.currentView !== view) {
-    state.history.push(state.currentView);
-  }
+  if (pushHistory && state.currentView !== view) state.history.push(state.currentView);
   state.currentView = view;
+
   els.viewTitle.textContent = viewTitleMap[view];
   els.topBackBtn.classList.toggle('hidden', state.history.length === 0);
 }
 
 function goBack() {
   if (!state.history.length) return;
-
   if (state.currentView === 'room' && state.currentRoom) {
     socket.emit('room:leave');
     state.currentRoom = null;
   }
-
   const prev = state.history.pop();
   goToView(prev, false);
 }
 
 function resetIdentity() {
-  if (state.currentRoom) {
-    socket.emit('room:leave');
-  }
+  if (state.currentRoom) socket.emit('room:leave');
   state.myTag = '';
   state.currentRoom = null;
   state.mode = '';
   state.gameType = '';
   state.history = [];
+  state.board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
   els.playerBadge.classList.add('hidden');
   els.changeNameBtn.classList.add('hidden');
-  els.myTag.textContent = '';
   els.nameInput.value = '';
+  els.myTag.textContent = '';
   goToView('register', false);
 }
 
@@ -154,9 +169,7 @@ function renderBoard(onClick) {
         stone.className = `stone ${v}`;
         cell.appendChild(stone);
       }
-      if (state.lastMove && state.lastMove.x === x && state.lastMove.y === y) {
-        cell.classList.add('last-move');
-      }
+      if (state.lastMove && state.lastMove.x === x && state.lastMove.y === y) cell.classList.add('last-move');
       els.board.appendChild(cell);
     }
   }
@@ -166,9 +179,10 @@ function renderRooms() {
   els.roomList.innerHTML = '';
   state.roomList.forEach((room) => {
     const li = document.createElement('li');
-    li.innerHTML = `<strong>${room.name}</strong> <span>房主 ${room.hostTag}｜${room.players.length}/2｜${room.timeLimitSec}s</span>`;
+    li.innerHTML = `<strong>${room.name}</strong><span>房主 ${room.hostTag}｜${room.players.length}/2｜${room.timeLimitSec}s</span>`;
     const btn = document.createElement('button');
     btn.textContent = '加入';
+    btn.className = 'btn primary';
     btn.addEventListener('click', () => {
       const pwd = room.hasPassword ? prompt('輸入房間密碼') || '' : '';
       socket.emit('room:join', { roomId: room.id, password: pwd }, (res) => {
@@ -202,6 +216,7 @@ function updateRoomUI() {
     li.textContent = `${p.tag} ${p.tag === room.hostTag ? '(房主)' : ''} ${ready}`;
     if (isHost && p.tag !== room.hostTag) {
       const kickBtn = document.createElement('button');
+      kickBtn.className = 'btn secondary';
       kickBtn.textContent = '踢出';
       kickBtn.addEventListener('click', () => {
         socket.emit('room:kick', p.tag, (res) => {
@@ -214,13 +229,41 @@ function updateRoomUI() {
   });
 }
 
+function getTurnTag() {
+  return Object.keys(state.colorByTag).find((tag) => state.colorByTag[tag] === state.turn) || '-';
+}
+
+function currentRemainingForMultiplayer() {
+  const out = { ...state.remainingMs };
+  const turnTag = getTurnTag();
+  if (!turnTag || !out[turnTag]) return out;
+  const elapsed = Math.max(0, Date.now() - state.syncAt);
+  out[turnTag] = Math.max(0, out[turnTag] - elapsed);
+  return out;
+}
+
 function updateGameStatus() {
-  if (state.gameType !== 'multiplayer') return;
-  const turnTag = Object.keys(state.colorByTag).find((k) => state.colorByTag[k] === state.turn) || '-';
-  const timerText = Object.entries(state.remainingMs)
-    .map(([tag, ms]) => `${tag}: ${formatMs(ms)}`)
-    .join(' ｜ ');
-  els.gameStatus.textContent = `目前回合：${turnTag}（${state.turn}）\n${timerText}`;
+  if (state.gameType === 'multiplayer') {
+    const turnTag = getTurnTag();
+    const rem = currentRemainingForMultiplayer();
+    const timerText = Object.entries(rem)
+      .map(([tag, ms]) => `${tag}: ${formatMs(ms)}`)
+      .join('｜');
+    els.gameStatus.textContent = `${formatMs(rem[turnTag] || 0)}\n目前回合：${turnTag}\n${timerText}`;
+    return;
+  }
+
+  if (state.gameType === 'ai') {
+    const elapsed = Math.max(0, Date.now() - state.aiClock.turnStartAt);
+    const playerMs = state.aiClock.turn === 'player'
+      ? Math.max(0, state.aiClock.playerMs - elapsed)
+      : state.aiClock.playerMs;
+    const aiMs = state.aiClock.turn === 'ai'
+      ? Math.max(0, state.aiClock.aiMs - elapsed)
+      : state.aiClock.aiMs;
+
+    els.gameStatus.textContent = `${formatMs(playerMs)}\n玩家 VS ${els.aiDifficulty.options[els.aiDifficulty.selectedIndex].text}AI\n${formatMs(aiMs)}\n目前回合：${state.aiClock.turn === 'player' ? '玩家' : 'AI'}`;
+  }
 }
 
 function checkWinner(board, x, y, color) {
@@ -261,7 +304,9 @@ function aiPickMove(difficulty) {
   };
 
   if (difficulty === 'easy') return empties[Math.floor(Math.random() * empties.length)];
-  if (difficulty === 'medium') return findWinning('white') || findWinning('black') || empties[Math.floor(Math.random() * empties.length)];
+  if (difficulty === 'medium') {
+    return findWinning('white') || findWinning('black') || empties[Math.floor(Math.random() * empties.length)];
+  }
 
   const center = { x: 7, y: 7 };
   const sorted = [...empties].sort((a, b) => {
@@ -272,15 +317,36 @@ function aiPickMove(difficulty) {
   return findWinning('white') || findWinning('black') || sorted[0];
 }
 
+function consumeAiTurnTime() {
+  const elapsed = Math.max(0, Date.now() - state.aiClock.turnStartAt);
+  if (state.aiClock.turn === 'player') {
+    state.aiClock.playerMs = Math.max(0, state.aiClock.playerMs - elapsed);
+  } else {
+    state.aiClock.aiMs = Math.max(0, state.aiClock.aiMs - elapsed);
+  }
+}
+
 function aiMove() {
+  consumeAiTurnTime();
+  state.aiClock.turn = 'ai';
+  state.aiClock.turnStartAt = Date.now();
+
   const pick = aiPickMove(state.aiDifficulty);
   if (!pick) return;
+
   const { x, y } = pick;
   state.board[y][x] = 'white';
   state.lastMove = { x, y, tag: 'AI' };
   playStoneSound();
+
+  consumeAiTurnTime();
+  state.aiClock.turn = 'player';
+  state.aiClock.turnStartAt = Date.now();
+
   renderBoard(playerMoveAi);
   els.lastMoveHint.textContent = `上一手：AI 落在 (${x + 1}, ${y + 1})`;
+  updateGameStatus();
+
   if (checkWinner(state.board, x, y, 'white')) {
     alert('AI 獲勝');
     goToView('computer');
@@ -289,17 +355,27 @@ function aiMove() {
 
 function playerMoveAi(x, y) {
   if (state.board[y][x]) return;
+
+  consumeAiTurnTime();
+
   state.board[y][x] = 'black';
-  state.lastMove = { x, y, tag: state.myTag };
+  state.lastMove = { x, y, tag: state.myTag || '玩家' };
   playStoneSound();
+
+  state.aiClock.turn = 'ai';
+  state.aiClock.turnStartAt = Date.now();
+
   renderBoard(playerMoveAi);
-  els.lastMoveHint.textContent = `上一手：${state.myTag} 落在 (${x + 1}, ${y + 1})，輪到 AI`;
+  els.lastMoveHint.textContent = `上一手：${state.myTag || '玩家'} 落在 (${x + 1}, ${y + 1})，輪到 AI`;
+  updateGameStatus();
+
   if (checkWinner(state.board, x, y, 'black')) {
     alert('你獲勝');
     goToView('computer');
     return;
   }
-  setTimeout(aiMove, state.aiDifficulty === 'hard' ? 250 : 500);
+
+  setTimeout(aiMove, state.aiDifficulty === 'hard' ? 220 : 480);
 }
 
 els.topBackBtn.addEventListener('click', goBack);
@@ -330,10 +406,16 @@ els.startAiBtn.addEventListener('click', () => {
   state.aiDifficulty = els.aiDifficulty.value;
   state.board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
   state.lastMove = null;
+  state.aiClock = {
+    playerMs: AI_TOTAL_MS,
+    aiMs: AI_TOTAL_MS,
+    turn: 'player',
+    turnStartAt: Date.now(),
+  };
   goToView('game');
-  els.gameStatus.textContent = `玩家 VS ${els.aiDifficulty.options[els.aiDifficulty.selectedIndex].text}AI`;
   els.lastMoveHint.textContent = '目前回合：玩家（黑棋）';
   renderBoard(playerMoveAi);
+  updateGameStatus();
 });
 
 els.createRoomBtn.addEventListener('click', () => {
@@ -408,7 +490,9 @@ socket.on('game:started', ({ room, board, turn, colorByTag, remainingMs }) => {
   state.board = board;
   state.turn = turn;
   state.colorByTag = colorByTag;
-  state.remainingMs = remainingMs;
+  state.remainingMs = { ...remainingMs };
+  state.syncTurn = turn;
+  state.syncAt = Date.now();
   state.lastMove = null;
   goToView('game');
   updateGameStatus();
@@ -424,19 +508,22 @@ socket.on('game:state', ({ board, turn, remainingMs, lastMove, room }) => {
   const oldLastMove = state.lastMove;
   state.board = board;
   state.turn = turn;
-  state.remainingMs = remainingMs;
+  state.remainingMs = { ...remainingMs };
+  state.syncTurn = turn;
+  state.syncAt = Date.now();
   state.lastMove = lastMove;
   state.currentRoom = room;
-  updateGameStatus();
 
   if (lastMove && (!oldLastMove || lastMove.x !== oldLastMove.x || lastMove.y !== oldLastMove.y)) {
     playStoneSound();
   }
 
+  updateGameStatus();
   if (lastMove) {
     const nextTag = Object.keys(state.colorByTag).find((tag) => state.colorByTag[tag] === turn) || '下一位玩家';
     els.lastMoveHint.textContent = `上一手：${lastMove.tag} 落在 (${lastMove.x + 1}, ${lastMove.y + 1})，輪到 ${nextTag}`;
   }
+
   renderBoard((x, y) => {
     socket.emit('game:move', { x, y }, (res) => {
       if (!res.ok) alert(res.error);
@@ -454,8 +541,8 @@ socket.on('game:ended', ({ winnerTag, reason, loserTag }) => {
 });
 
 setInterval(() => {
-  if (state.gameType !== 'multiplayer' || !state.currentRoom || state.currentRoom.status !== 'playing') return;
+  if (state.currentView !== 'game') return;
   updateGameStatus();
-}, 500);
+}, 250);
 
 goToView('register', false);
