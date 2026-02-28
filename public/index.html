@@ -18,15 +18,16 @@
         </div>
         <div class="topbar-actions">
           <span id="playerBadge" class="player-badge hidden">未登入</span>
+          <button id="changeNameBtn" class="ghost hidden">更換名字</button>
           <button id="topBackBtn" class="ghost hidden">← 上一步</button>
         </div>
       </header>
 
       <p id="viewTitle" class="view-title">建立玩家身份</p>
 
-      <section id="registerCard" class="card">
+      <section id="registerCard" class="card centered-card">
         <h2>建立玩家身份</h2>
-        <p class="hint">輸入名稱後，系統會儲存並分配唯一編號（例如 Eiok#000）。</p>
+        <p class="hint">輸入名稱後，系統會分配唯一編號（例如 Eiok#000）。</p>
         <div class="row">
           <input id="nameInput" placeholder="輸入名稱" maxlength="20" />
           <button id="registerBtn">建立玩家</button>
@@ -34,21 +35,21 @@
         <p id="myTag" class="hint"></p>
       </section>
 
-      <section id="menuCard" class="card hidden">
+      <section id="menuCard" class="card centered-card hidden">
         <h2>選擇模式</h2>
         <div class="mode-grid">
           <button data-mode="computer" class="mode-btn">
             <strong>🤖 電腦模式</strong>
-            <small>三種難度，快速練習</small>
+            <small>單機練習｜簡單/中等/困難</small>
           </button>
           <button data-mode="multiplayer" class="mode-btn">
             <strong>🧑‍🤝‍🧑 玩家模式</strong>
-            <small>建立/加入房間即時對弈</small>
+            <small>房間配對｜即時對戰</small>
           </button>
         </div>
       </section>
 
-      <section id="computerCard" class="card hidden">
+      <section id="computerCard" class="card centered-card hidden">
         <h2>電腦模式設定</h2>
         <label class="field">難度
           <select id="aiDifficulty">
@@ -62,7 +63,7 @@
         </div>
       </section>
 
-      <section id="lobbyCard" class="card hidden">
+      <section id="lobbyCard" class="card centered-card hidden">
         <h2>玩家大廳</h2>
         <div class="form-grid">
           <input id="roomName" placeholder="房間名稱" maxlength="30" />
@@ -73,7 +74,7 @@
         <ul id="roomList" class="list"></ul>
       </section>
 
-      <section id="roomCard" class="card hidden">
+      <section id="roomCard" class="card centered-card hidden">
         <h2>房間資訊</h2>
         <p id="roomInfo" class="hint"></p>
         <div class="form-grid">
@@ -86,13 +87,20 @@
       </section>
 
       <section id="gameCard" class="card hidden">
-        <div class="row between">
-          <h2>對局中</h2>
-          <button id="surrenderBtn" class="danger">投降</button>
+        <div class="game-layout">
+          <div class="board-wrap">
+            <div id="board" class="board"></div>
+          </div>
+
+          <aside class="game-panel">
+            <p id="gameStatus" class="status"></p>
+            <p id="lastMoveHint" class="hint"></p>
+
+            <div class="panel-buttons">
+              <button id="surrenderBtn" class="danger">認輸 / 投降</button>
+            </div>
+          </aside>
         </div>
-        <p id="gameStatus" class="status"></p>
-        <p id="lastMoveHint" class="hint"></p>
-        <div id="board" class="board"></div>
       </section>
     </main>
 

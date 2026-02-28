@@ -31,6 +31,7 @@ const els = {
   topBackBtn: document.getElementById('topBackBtn'),
   playerBadge: document.getElementById('playerBadge'),
   viewTitle: document.getElementById('viewTitle'),
+  changeNameBtn: document.getElementById('changeNameBtn'),
 };
 
 const views = {
@@ -67,6 +68,34 @@ const state = {
   history: [],
 };
 
+let audioContext = null;
+
+function playStoneSound() {
+  try {
+    if (!audioContext) {
+      audioContext = new window.AudioContext();
+    }
+    const now = audioContext.currentTime;
+    const osc = audioContext.createOscillator();
+    const gain = audioContext.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(520, now);
+    osc.frequency.exponentialRampToValueAtTime(300, now + 0.08);
+
+    gain.gain.setValueAtTime(0.001, now);
+    gain.gain.exponentialRampToValueAtTime(0.14, now + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+
+    osc.connect(gain);
+    gain.connect(audioContext.destination);
+    osc.start(now);
+    osc.stop(now + 0.11);
+  } catch (e) {
+    // ignore audio errors
+  }
+}
+
 function goToView(view, pushHistory = true) {
   Object.values(views).forEach((card) => card.classList.add('hidden'));
   views[view].classList.remove('hidden');
@@ -89,6 +118,22 @@ function goBack() {
 
   const prev = state.history.pop();
   goToView(prev, false);
+}
+
+function resetIdentity() {
+  if (state.currentRoom) {
+    socket.emit('room:leave');
+  }
+  state.myTag = '';
+  state.currentRoom = null;
+  state.mode = '';
+  state.gameType = '';
+  state.history = [];
+  els.playerBadge.classList.add('hidden');
+  els.changeNameBtn.classList.add('hidden');
+  els.myTag.textContent = '';
+  els.nameInput.value = '';
+  goToView('register', false);
 }
 
 function formatMs(ms = 0) {
@@ -174,8 +219,8 @@ function updateGameStatus() {
   const turnTag = Object.keys(state.colorByTag).find((k) => state.colorByTag[k] === state.turn) || '-';
   const timerText = Object.entries(state.remainingMs)
     .map(([tag, ms]) => `${tag}: ${formatMs(ms)}`)
-    .join('｜');
-  els.gameStatus.textContent = `目前回合：${turnTag}（${state.turn}）｜${timerText}`;
+    .join(' ｜ ');
+  els.gameStatus.textContent = `目前回合：${turnTag}（${state.turn}）\n${timerText}`;
 }
 
 function checkWinner(board, x, y, color) {
@@ -216,9 +261,7 @@ function aiPickMove(difficulty) {
   };
 
   if (difficulty === 'easy') return empties[Math.floor(Math.random() * empties.length)];
-  if (difficulty === 'medium') {
-    return findWinning('white') || findWinning('black') || empties[Math.floor(Math.random() * empties.length)];
-  }
+  if (difficulty === 'medium') return findWinning('white') || findWinning('black') || empties[Math.floor(Math.random() * empties.length)];
 
   const center = { x: 7, y: 7 };
   const sorted = [...empties].sort((a, b) => {
@@ -235,6 +278,7 @@ function aiMove() {
   const { x, y } = pick;
   state.board[y][x] = 'white';
   state.lastMove = { x, y, tag: 'AI' };
+  playStoneSound();
   renderBoard(playerMoveAi);
   els.lastMoveHint.textContent = `上一手：AI 落在 (${x + 1}, ${y + 1})`;
   if (checkWinner(state.board, x, y, 'white')) {
@@ -247,6 +291,7 @@ function playerMoveAi(x, y) {
   if (state.board[y][x]) return;
   state.board[y][x] = 'black';
   state.lastMove = { x, y, tag: state.myTag };
+  playStoneSound();
   renderBoard(playerMoveAi);
   els.lastMoveHint.textContent = `上一手：${state.myTag} 落在 (${x + 1}, ${y + 1})，輪到 AI`;
   if (checkWinner(state.board, x, y, 'black')) {
@@ -258,6 +303,7 @@ function playerMoveAi(x, y) {
 }
 
 els.topBackBtn.addEventListener('click', goBack);
+els.changeNameBtn.addEventListener('click', resetIdentity);
 
 els.registerBtn.addEventListener('click', () => {
   socket.emit('player:register', els.nameInput.value, (res) => {
@@ -266,6 +312,7 @@ els.registerBtn.addEventListener('click', () => {
     els.myTag.textContent = `你的玩家標籤：${res.tag}`;
     els.playerBadge.textContent = res.tag;
     els.playerBadge.classList.remove('hidden');
+    els.changeNameBtn.classList.remove('hidden');
     goToView('menu');
   });
 });
@@ -284,8 +331,8 @@ els.startAiBtn.addEventListener('click', () => {
   state.board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
   state.lastMove = null;
   goToView('game');
-  els.gameStatus.textContent = `電腦模式（${els.aiDifficulty.options[els.aiDifficulty.selectedIndex].text}）`;
-  els.lastMoveHint.textContent = '你先手（黑棋）';
+  els.gameStatus.textContent = `玩家 VS ${els.aiDifficulty.options[els.aiDifficulty.selectedIndex].text}AI`;
+  els.lastMoveHint.textContent = '目前回合：玩家（黑棋）';
   renderBoard(playerMoveAi);
 });
 
@@ -374,12 +421,18 @@ socket.on('game:started', ({ room, board, turn, colorByTag, remainingMs }) => {
 });
 
 socket.on('game:state', ({ board, turn, remainingMs, lastMove, room }) => {
+  const oldLastMove = state.lastMove;
   state.board = board;
   state.turn = turn;
   state.remainingMs = remainingMs;
   state.lastMove = lastMove;
   state.currentRoom = room;
   updateGameStatus();
+
+  if (lastMove && (!oldLastMove || lastMove.x !== oldLastMove.x || lastMove.y !== oldLastMove.y)) {
+    playStoneSound();
+  }
+
   if (lastMove) {
     const nextTag = Object.keys(state.colorByTag).find((tag) => state.colorByTag[tag] === turn) || '下一位玩家';
     els.lastMoveHint.textContent = `上一手：${lastMove.tag} 落在 (${lastMove.x + 1}, ${lastMove.y + 1})，輪到 ${nextTag}`;
