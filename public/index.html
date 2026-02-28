@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GoBang 五子棋</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main>
+      <h1>GoBang 五子棋</h1>
+
+      <section id="registerCard" class="card">
+        <h2>建立玩家名稱</h2>
+        <p>請輸入名稱，系統會自動分配唯一編號（例如 Eiok#000）。</p>
+        <div class="row">
+          <input id="nameInput" placeholder="輸入名稱" maxlength="20" />
+          <button id="registerBtn">確認</button>
+        </div>
+        <p id="myTag" class="hint"></p>
+      </section>
+
+      <section id="menuCard" class="card hidden">
+        <h2>選擇模式</h2>
+        <div class="row">
+          <button data-mode="computer">電腦模式</button>
+          <button data-mode="multiplayer">玩家模式</button>
+        </div>
+      </section>
+
+      <section id="computerCard" class="card hidden">
+        <h2>電腦模式</h2>
+        <label>難度
+          <select id="aiDifficulty">
+            <option value="easy">簡單</option>
+            <option value="medium">中等</option>
+            <option value="hard">困難</option>
+          </select>
+        </label>
+        <div class="row">
+          <button id="startAiBtn">開始對戰</button>
+          <button class="backMenu">返回選單</button>
+        </div>
+      </section>
+
+      <section id="lobbyCard" class="card hidden">
+        <h2>玩家模式 - 房間列表</h2>
+        <div class="row wrap">
+          <input id="roomName" placeholder="房間名稱" maxlength="30" />
+          <input id="roomPassword" placeholder="房間密碼（可留空）" maxlength="20" />
+          <input id="roomTime" type="number" min="30" max="1800" value="300" />
+          <button id="createRoomBtn">建立房間</button>
+          <button class="backMenu">返回選單</button>
+        </div>
+        <ul id="roomList" class="list"></ul>
+      </section>
+
+      <section id="roomCard" class="card hidden">
+        <h2>房間</h2>
+        <p id="roomInfo"></p>
+        <div class="row wrap">
+          <label>總思考秒數 <input id="setRoomTime" type="number" min="30" max="1800" /></label>
+          <button id="saveRoomTimeBtn">房主套用時間</button>
+          <button id="readyBtn">準備</button>
+          <button id="leaveRoomBtn">離開房間</button>
+        </div>
+        <ul id="roomPlayers" class="list"></ul>
+      </section>
+
+      <section id="gameCard" class="card hidden">
+        <h2>對局</h2>
+        <p id="gameStatus"></p>
+        <p id="lastMoveHint" class="hint"></p>
+        <div id="board" class="board"></div>
+        <div class="row">
+          <button id="surrenderBtn">投降</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="./main.js"></script>
+  </body>
+</html>
