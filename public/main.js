@@ -28,6 +28,27 @@ const els = {
   gameStatus: document.getElementById('gameStatus'),
   lastMoveHint: document.getElementById('lastMoveHint'),
   surrenderBtn: document.getElementById('surrenderBtn'),
+  topBackBtn: document.getElementById('topBackBtn'),
+  playerBadge: document.getElementById('playerBadge'),
+  viewTitle: document.getElementById('viewTitle'),
+};
+
+const views = {
+  register: els.registerCard,
+  menu: els.menuCard,
+  computer: els.computerCard,
+  lobby: els.lobbyCard,
+  room: els.roomCard,
+  game: els.gameCard,
+};
+
+const viewTitleMap = {
+  register: '建立玩家身份',
+  menu: '選擇模式',
+  computer: '電腦模式設定',
+  lobby: '玩家大廳',
+  room: '房間資訊',
+  game: '對局中',
 };
 
 const state = {
@@ -37,24 +58,37 @@ const state = {
   currentRoom: null,
   board: Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null)),
   aiDifficulty: 'easy',
-  ai: { turn: 'white' },
   gameType: '',
   colorByTag: {},
   turn: 'black',
   lastMove: null,
   remainingMs: {},
+  currentView: 'register',
+  history: [],
 };
 
-function showOnly(...cards) {
-  [
-    els.registerCard,
-    els.menuCard,
-    els.computerCard,
-    els.lobbyCard,
-    els.roomCard,
-    els.gameCard,
-  ].forEach((card) => card.classList.add('hidden'));
-  cards.forEach((card) => card.classList.remove('hidden'));
+function goToView(view, pushHistory = true) {
+  Object.values(views).forEach((card) => card.classList.add('hidden'));
+  views[view].classList.remove('hidden');
+
+  if (pushHistory && state.currentView !== view) {
+    state.history.push(state.currentView);
+  }
+  state.currentView = view;
+  els.viewTitle.textContent = viewTitleMap[view];
+  els.topBackBtn.classList.toggle('hidden', state.history.length === 0);
+}
+
+function goBack() {
+  if (!state.history.length) return;
+
+  if (state.currentView === 'room' && state.currentRoom) {
+    socket.emit('room:leave');
+    state.currentRoom = null;
+  }
+
+  const prev = state.history.pop();
+  goToView(prev, false);
 }
 
 function formatMs(ms = 0) {
@@ -87,7 +121,7 @@ function renderRooms() {
   els.roomList.innerHTML = '';
   state.roomList.forEach((room) => {
     const li = document.createElement('li');
-    li.innerHTML = `<strong>${room.name}</strong> | 房主 ${room.hostTag} | 人數 ${room.players.length}/2 | 時間 ${room.timeLimitSec}s`;
+    li.innerHTML = `<strong>${room.name}</strong> <span>房主 ${room.hostTag}｜${room.players.length}/2｜${room.timeLimitSec}s</span>`;
     const btn = document.createElement('button');
     btn.textContent = '加入';
     btn.addEventListener('click', () => {
@@ -104,15 +138,15 @@ function renderRooms() {
 }
 
 function enterRoom() {
-  showOnly(els.menuCard, els.roomCard);
   updateRoomUI();
+  goToView('room');
 }
 
 function updateRoomUI() {
   if (!state.currentRoom) return;
   const room = state.currentRoom;
   const isHost = room.hostTag === state.myTag;
-  els.roomInfo.textContent = `房間 ${room.name} | 房主: ${room.hostTag} | 狀態: ${room.status}`;
+  els.roomInfo.textContent = `房間：${room.name}｜房主：${room.hostTag}｜狀態：${room.status}`;
   els.setRoomTime.value = room.timeLimitSec;
   els.saveRoomTimeBtn.disabled = !isHost;
 
@@ -136,13 +170,12 @@ function updateRoomUI() {
 }
 
 function updateGameStatus() {
-  if (state.gameType === 'multiplayer') {
-    const turnTag = Object.keys(state.colorByTag).find((k) => state.colorByTag[k] === state.turn) || '-';
-    const timerText = Object.entries(state.remainingMs)
-      .map(([tag, ms]) => `${tag}: ${formatMs(ms)}`)
-      .join(' | ');
-    els.gameStatus.textContent = `目前回合：${turnTag}（${state.turn}） | ${timerText}`;
-  }
+  if (state.gameType !== 'multiplayer') return;
+  const turnTag = Object.keys(state.colorByTag).find((k) => state.colorByTag[k] === state.turn) || '-';
+  const timerText = Object.entries(state.remainingMs)
+    .map(([tag, ms]) => `${tag}: ${formatMs(ms)}`)
+    .join('｜');
+  els.gameStatus.textContent = `目前回合：${turnTag}（${state.turn}）｜${timerText}`;
 }
 
 function checkWinner(board, x, y, color) {
@@ -182,9 +215,7 @@ function aiPickMove(difficulty) {
     return null;
   };
 
-  if (difficulty === 'easy') {
-    return empties[Math.floor(Math.random() * empties.length)];
-  }
+  if (difficulty === 'easy') return empties[Math.floor(Math.random() * empties.length)];
   if (difficulty === 'medium') {
     return findWinning('white') || findWinning('black') || empties[Math.floor(Math.random() * empties.length)];
   }
@@ -208,8 +239,7 @@ function aiMove() {
   els.lastMoveHint.textContent = `上一手：AI 落在 (${x + 1}, ${y + 1})`;
   if (checkWinner(state.board, x, y, 'white')) {
     alert('AI 獲勝');
-    showOnly(els.menuCard, els.computerCard);
-    return;
+    goToView('computer');
   }
 }
 
@@ -221,18 +251,22 @@ function playerMoveAi(x, y) {
   els.lastMoveHint.textContent = `上一手：${state.myTag} 落在 (${x + 1}, ${y + 1})，輪到 AI`;
   if (checkWinner(state.board, x, y, 'black')) {
     alert('你獲勝');
-    showOnly(els.menuCard, els.computerCard);
+    goToView('computer');
     return;
   }
   setTimeout(aiMove, state.aiDifficulty === 'hard' ? 250 : 500);
 }
+
+els.topBackBtn.addEventListener('click', goBack);
 
 els.registerBtn.addEventListener('click', () => {
   socket.emit('player:register', els.nameInput.value, (res) => {
     if (!res.ok) return alert(res.error);
     state.myTag = res.tag;
     els.myTag.textContent = `你的玩家標籤：${res.tag}`;
-    showOnly(els.registerCard, els.menuCard);
+    els.playerBadge.textContent = res.tag;
+    els.playerBadge.classList.remove('hidden');
+    goToView('menu');
   });
 });
 
@@ -240,13 +274,8 @@ document.querySelectorAll('[data-mode]').forEach((btn) => {
   btn.addEventListener('click', () => {
     const mode = btn.getAttribute('data-mode');
     state.mode = mode;
-    if (mode === 'computer') showOnly(els.menuCard, els.computerCard);
-    if (mode === 'multiplayer') showOnly(els.menuCard, els.lobbyCard);
+    goToView(mode === 'computer' ? 'computer' : 'lobby');
   });
-});
-
-document.querySelectorAll('.backMenu').forEach((btn) => {
-  btn.addEventListener('click', () => showOnly(els.registerCard, els.menuCard));
 });
 
 els.startAiBtn.addEventListener('click', () => {
@@ -254,7 +283,7 @@ els.startAiBtn.addEventListener('click', () => {
   state.aiDifficulty = els.aiDifficulty.value;
   state.board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
   state.lastMove = null;
-  showOnly(els.menuCard, els.computerCard, els.gameCard);
+  goToView('game');
   els.gameStatus.textContent = `電腦模式（${els.aiDifficulty.options[els.aiDifficulty.selectedIndex].text}）`;
   els.lastMoveHint.textContent = '你先手（黑棋）';
   renderBoard(playerMoveAi);
@@ -285,7 +314,7 @@ els.readyBtn.addEventListener('click', () => {
 els.leaveRoomBtn.addEventListener('click', () => {
   socket.emit('room:leave');
   state.currentRoom = null;
-  showOnly(els.menuCard, els.lobbyCard);
+  goToView('lobby');
 });
 
 els.saveRoomTimeBtn.addEventListener('click', () => {
@@ -301,8 +330,8 @@ els.surrenderBtn.addEventListener('click', () => {
     });
     return;
   }
-  alert('你已投降，返回模式選單。');
-  showOnly(els.menuCard, els.computerCard);
+  alert('你已投降，返回模式設定。');
+  goToView('computer');
 });
 
 socket.on('room:list', (rooms) => {
@@ -314,9 +343,7 @@ socket.on('room:updated', (room) => {
   if (state.currentRoom?.id === room.id) {
     state.currentRoom = room;
     updateRoomUI();
-    if (room.status !== 'playing') {
-      showOnly(els.menuCard, els.roomCard);
-    }
+    if (room.status !== 'playing') goToView('room');
   }
   state.roomList = state.roomList.map((r) => (r.id === room.id ? room : r));
   renderRooms();
@@ -325,7 +352,7 @@ socket.on('room:updated', (room) => {
 socket.on('room:kicked', () => {
   alert('你已被房主踢出房間');
   state.currentRoom = null;
-  showOnly(els.menuCard, els.lobbyCard);
+  goToView('lobby');
 });
 
 socket.on('game:started', ({ room, board, turn, colorByTag, remainingMs }) => {
@@ -336,7 +363,7 @@ socket.on('game:started', ({ room, board, turn, colorByTag, remainingMs }) => {
   state.colorByTag = colorByTag;
   state.remainingMs = remainingMs;
   state.lastMove = null;
-  showOnly(els.menuCard, els.roomCard, els.gameCard);
+  goToView('game');
   updateGameStatus();
   els.lastMoveHint.textContent = '對局開始';
   renderBoard((x, y) => {
@@ -370,7 +397,7 @@ socket.on('game:ended', ({ winnerTag, reason, loserTag }) => {
   else if (reason === 'timeout') message = `${loserTag} 超時，${winnerTag} 獲勝`;
   else if (winnerTag) message = `${winnerTag} 五連珠獲勝`;
   alert(`${message}，即將返回房間。`);
-  showOnly(els.menuCard, els.roomCard);
+  goToView(state.gameType === 'multiplayer' ? 'room' : 'computer');
 });
 
 setInterval(() => {
@@ -378,4 +405,4 @@ setInterval(() => {
   updateGameStatus();
 }, 500);
 
-showOnly(els.registerCard);
+goToView('register', false);
