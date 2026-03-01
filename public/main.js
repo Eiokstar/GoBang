@@ -301,35 +301,128 @@ function checkWinner(board, x, y, color) {
   return false;
 }
 
-function aiPickMove(difficulty) {
-  const empties = [];
-  for (let y = 0; y < BOARD_SIZE; y += 1) {
-    for (let x = 0; x < BOARD_SIZE; x += 1) {
-      if (!state.board[y][x]) empties.push({ x, y });
-    }
-  }
-  if (!empties.length) return null;
-
-  const findWinning = (color) => {
-    for (const { x, y } of empties) {
-      state.board[y][x] = color;
-      const win = checkWinner(state.board, x, y, color);
-      state.board[y][x] = null;
-      if (win) return { x, y };
-    }
-    return null;
+function evaluateLine(line) {
+  const scoreTable = {
+    '11111': 500000,
+    '011110': 120000,
+    '211110': 20000,
+    '011112': 20000,
+    '01110': 8000,
+    '010110': 7000,
+    '011010': 7000,
+    '001112': 3500,
+    '211100': 3500,
+    '01100': 2200,
+    '00110': 2200,
+    '001010': 1800,
   };
 
-  if (difficulty === 'easy') return empties[Math.floor(Math.random() * empties.length)];
-  if (difficulty === 'medium') return findWinning('white') || findWinning('black') || empties[Math.floor(Math.random() * empties.length)];
+  let score = 0;
+  for (const [pattern, val] of Object.entries(scoreTable)) {
+    if (line.includes(pattern)) score += val;
+  }
+  return score;
+}
 
-  const center = { x: 7, y: 7 };
-  const sorted = [...empties].sort((a, b) => {
-    const da = Math.abs(a.x - center.x) + Math.abs(a.y - center.y);
-    const db = Math.abs(b.x - center.x) + Math.abs(b.y - center.y);
-    return da - db;
-  });
-  return findWinning('white') || findWinning('black') || sorted[0];
+function evaluatePoint(board, x, y, color) {
+  const enemy = color === 'white' ? 'black' : 'white';
+  const dirs = [[1, 0], [0, 1], [1, 1], [1, -1]];
+  let offense = 0;
+  let defense = 0;
+
+  const toDigit = (v, self) => {
+    if (!v) return '0';
+    return v === self ? '1' : '2';
+  };
+
+  for (const [dx, dy] of dirs) {
+    let selfLine = '';
+    let enemyLine = '';
+    for (let step = -4; step <= 4; step += 1) {
+      const nx = x + step * dx;
+      const ny = y + step * dy;
+      if (nx < 0 || ny < 0 || nx >= BOARD_SIZE || ny >= BOARD_SIZE) {
+        selfLine += '2';
+        enemyLine += '2';
+      } else {
+        const cur = board[ny][nx];
+        if (step === 0) {
+          selfLine += '1';
+          enemyLine += '1';
+        } else {
+          selfLine += toDigit(cur, color);
+          enemyLine += toDigit(cur, enemy);
+        }
+      }
+    }
+    offense += evaluateLine(selfLine);
+    defense += evaluateLine(enemyLine);
+  }
+
+  const centerBonus = 28 - (Math.abs(x - 7) + Math.abs(y - 7));
+  return offense + defense * 0.92 + centerBonus;
+}
+
+function getCandidateMoves(board) {
+  const candidates = [];
+  const hasStone = board.some((row) => row.some(Boolean));
+  if (!hasStone) return [{ x: 7, y: 7 }];
+
+  for (let y = 0; y < BOARD_SIZE; y += 1) {
+    for (let x = 0; x < BOARD_SIZE; x += 1) {
+      if (board[y][x]) continue;
+      let near = false;
+      for (let dy = -2; dy <= 2 && !near; dy += 1) {
+        for (let dx = -2; dx <= 2; dx += 1) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= BOARD_SIZE || ny >= BOARD_SIZE) continue;
+          if (board[ny][nx]) {
+            near = true;
+            break;
+          }
+        }
+      }
+      if (near) candidates.push({ x, y });
+    }
+  }
+  return candidates;
+}
+
+function aiPickMove(difficulty) {
+  const candidates = getCandidateMoves(state.board);
+  if (!candidates.length) return null;
+
+  for (const m of candidates) {
+    state.board[m.y][m.x] = 'white';
+    const win = checkWinner(state.board, m.x, m.y, 'white');
+    state.board[m.y][m.x] = null;
+    if (win) return m;
+  }
+
+  for (const m of candidates) {
+    state.board[m.y][m.x] = 'black';
+    const block = checkWinner(state.board, m.x, m.y, 'black');
+    state.board[m.y][m.x] = null;
+    if (block) return m;
+  }
+
+  if (difficulty === 'easy') {
+    const randomPool = candidates.slice(0, Math.min(12, candidates.length));
+    return randomPool[Math.floor(Math.random() * randomPool.length)];
+  }
+
+  const scored = candidates.map((m) => ({
+    ...m,
+    score: evaluatePoint(state.board, m.x, m.y, 'white'),
+  })).sort((a, b) => b.score - a.score);
+
+  if (difficulty === 'medium') {
+    const top = scored.slice(0, Math.min(4, scored.length));
+    return top[Math.floor(Math.random() * top.length)];
+  }
+
+  return scored[0];
 }
 
 function consumeAiTurnTime() {

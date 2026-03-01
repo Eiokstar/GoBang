@@ -49,25 +49,30 @@ function createTag(baseName, callback) {
     callback(new Error('名稱不可為空'));
     return;
   }
+
   db.get(
-    'SELECT tag FROM players WHERE base_name = ? ORDER BY tag DESC LIMIT 1',
+    `SELECT MAX(CAST(SUBSTR(tag, INSTR(tag, '#') + 1) AS INTEGER)) AS max_suffix
+     FROM players
+     WHERE base_name = ?`,
     [safeBase],
     (err, row) => {
       if (err) {
         callback(err);
         return;
       }
-      let suffix = 0;
-      if (row?.tag) {
-        const parts = row.tag.split('#');
-        suffix = Number(parts[1]) + 1;
-      }
-      if (suffix > 999) {
+
+      const nextSuffix = Number.isInteger(row?.max_suffix) ? row.max_suffix + 1 : 0;
+      if (nextSuffix > 999) {
         callback(new Error('該名稱已達上限'));
         return;
       }
-      const tag = `${safeBase}#${String(suffix).padStart(3, '0')}`;
+
+      const tag = `${safeBase}#${String(nextSuffix).padStart(3, '0')}`;
       db.run('INSERT INTO players (base_name, tag) VALUES (?, ?)', [safeBase, tag], function insertCb(insertErr) {
+        if (insertErr && String(insertErr.message || '').includes('UNIQUE')) {
+          createTag(safeBase, callback);
+          return;
+        }
         callback(insertErr, tag);
       });
     }
