@@ -403,7 +403,7 @@ io.on('connection', (socket) => {
   socket.on('room:chat', (text, cb) => {
     const room = findRoomBySocket(socket.id);
     const player = players.get(socket.id);
-    if (!room || !player || room.status !== 'playing') return cb?.({ ok: false, error: '目前不可聊天' });
+    if (!room || !player) return cb?.({ ok: false, error: '目前不可聊天' });
     const safeText = String(text || '').trim().slice(0, 200);
     if (!safeText) return cb?.({ ok: false, error: '訊息不可為空' });
     const message = {

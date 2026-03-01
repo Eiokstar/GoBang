@@ -155,6 +155,13 @@ function goToView(view, pushHistory = true) {
   state.currentView = view;
   els.viewTitle.textContent = viewTitleMap[view];
   els.topBackBtn.classList.toggle('hidden', state.history.length === 0);
+  updateChatVisibility();
+}
+
+function updateChatVisibility() {
+  const inRoomFlow = state.currentView === 'room' || state.currentView === 'game';
+  const shouldShow = Boolean(state.currentRoom) && inRoomFlow && state.mode === 'multiplayer';
+  els.chatPanel.classList.toggle('hidden', !shouldShow);
 }
 
 function goBack() {
@@ -162,6 +169,8 @@ function goBack() {
   if (state.currentView === 'room' && state.currentRoom) {
     socket.emit('room:leave');
     state.currentRoom = null;
+    state.chatMessages = [];
+    renderChatMessages();
   }
   const prev = state.history.pop();
   goToView(prev, false);
@@ -187,7 +196,6 @@ function resetIdentity() {
   state.chatMessages = [];
   renderChatMessages();
   syncLobbyTimeUi();
-  els.chatPanel.classList.add('hidden');
   goToView('register', false);
 }
 
@@ -263,7 +271,6 @@ function updateRoomUI() {
   els.roomFirstTurn.value = room.firstTurn || 'host';
   els.saveRoomTimeBtn.disabled = !isHost;
   els.saveFirstTurnBtn.disabled = !isHost;
-  els.chatPanel.classList.toggle('hidden', room.status !== 'playing');
 
   els.roomPlayers.innerHTML = '';
   room.players.forEach((p) => {
@@ -709,7 +716,6 @@ els.startAiBtn.addEventListener('click', () => {
   hideResultModal();
   state.chatMessages = [];
   renderChatMessages();
-  els.chatPanel.classList.add('hidden');
   state.aiClock = { playerMs: AI_TOTAL_MS, aiMs: AI_TOTAL_MS, turn: state.aiFirstTurn === 'ai' ? 'ai' : 'player', turnStartAt: Date.now() };
   goToView('game');
   els.lastMoveHint.textContent = state.aiFirstTurn === 'ai' ? '電腦先手（黑棋）' : '玩家先手（黑棋）';
@@ -742,6 +748,8 @@ els.readyBtn.addEventListener('click', () => {
 els.leaveRoomBtn.addEventListener('click', () => {
   socket.emit('room:leave');
   state.currentRoom = null;
+  state.chatMessages = [];
+  renderChatMessages();
   goToView('lobby');
 });
 
@@ -758,7 +766,7 @@ els.saveFirstTurnBtn.addEventListener('click', () => {
 });
 
 els.sendChatBtn.addEventListener('click', () => {
-  if (state.gameType !== 'multiplayer' || !state.currentRoom || state.currentRoom.status !== 'playing') return;
+  if (!state.currentRoom || state.mode !== 'multiplayer') return;
   const text = (els.chatInput.value || '').trim();
   if (!text) return;
   socket.emit('room:chat', text, (res) => {
@@ -807,7 +815,8 @@ socket.on('room:kicked', () => {
   state.currentRoom = null;
   state.gameOver = false;
   els.undoAiBtn.classList.add('hidden');
-  els.chatPanel.classList.add('hidden');
+  state.chatMessages = [];
+  renderChatMessages();
   goToView('lobby');
 });
 
@@ -824,9 +833,7 @@ socket.on('game:started', ({ room, board, turn, colorByTag, remainingMs }) => {
   els.undoAiBtn.classList.add('hidden');
   els.returnAfterGameBtn.classList.add('hidden');
   hideResultModal();
-  state.chatMessages = [];
   renderChatMessages();
-  els.chatPanel.classList.remove('hidden');
   goToView('game');
   updateGameStatus();
   els.lastMoveHint.textContent = '對局開始';
