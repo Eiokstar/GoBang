@@ -185,3 +185,32 @@ input:focus, select:focus {
   .status { font-size: 22px; }
   .sub { font-size: 18px; }
 }
+
+
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(2, 6, 23, 0.64);
+  display: grid;
+  place-items: center;
+  z-index: 1000;
+  padding: 12px;
+}
+.modal-card {
+  width: min(92vw, 420px);
+  background: #0b1b41;
+  border: 1px solid #2d426f;
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 16px 35px rgba(0, 0, 0, 0.45);
+}
+.modal-card h3 {
+  margin: 0 0 10px;
+  font-size: 26px;
+}
+.modal-card p {
+  margin: 0 0 14px;
+  color: #c7d2fe;
+  white-space: pre-line;
+  line-height: 1.5;
+}

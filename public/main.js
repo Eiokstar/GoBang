@@ -36,6 +36,9 @@ const els = {
   returnAfterGameBtn: document.getElementById('returnAfterGameBtn'),
   reselectModeComputerBtn: document.getElementById('reselectModeComputerBtn'),
   reselectModeLobbyBtn: document.getElementById('reselectModeLobbyBtn'),
+  resultModal: document.getElementById('resultModal'),
+  resultMessage: document.getElementById('resultMessage'),
+  closeResultModalBtn: document.getElementById('closeResultModalBtn'),
 };
 
 const views = {
@@ -115,6 +118,15 @@ function playStoneSound() {
   }
 }
 
+function showResultModal(message) {
+  els.resultMessage.textContent = message;
+  els.resultModal.classList.remove('hidden');
+}
+
+function hideResultModal() {
+  els.resultModal.classList.add('hidden');
+}
+
 function removeGameFromHistory() {
   state.history = state.history.filter((h) => h !== 'game');
 }
@@ -154,6 +166,7 @@ function resetIdentity() {
   els.returnAfterGameBtn.classList.add('hidden');
   els.nameInput.value = '';
   els.myTag.textContent = '';
+  hideResultModal();
   goToView('register', false);
 }
 
@@ -303,18 +316,18 @@ function checkWinner(board, x, y, color) {
 
 function evaluateLine(line) {
   const scoreTable = {
-    '11111': 500000,
-    '011110': 120000,
-    '211110': 20000,
-    '011112': 20000,
-    '01110': 8000,
-    '010110': 7000,
-    '011010': 7000,
-    '001112': 3500,
-    '211100': 3500,
-    '01100': 2200,
-    '00110': 2200,
-    '001010': 1800,
+    '11111': 600000,
+    '011110': 180000,
+    '211110': 30000,
+    '011112': 30000,
+    '01110': 12000,
+    '010110': 9000,
+    '011010': 9000,
+    '001112': 4000,
+    '211100': 4000,
+    '01100': 2600,
+    '00110': 2600,
+    '001010': 2000,
   };
 
   let score = 0;
@@ -359,8 +372,19 @@ function evaluatePoint(board, x, y, color) {
     defense += evaluateLine(enemyLine);
   }
 
-  const centerBonus = 28 - (Math.abs(x - 7) + Math.abs(y - 7));
-  return offense + defense * 0.92 + centerBonus;
+  const centerBonus = 24 - (Math.abs(x - 7) + Math.abs(y - 7));
+  return offense + defense * 0.95 + centerBonus;
+}
+
+function evaluateBoard(board) {
+  const candidates = getCandidateMoves(board);
+  let aiScore = 0;
+  let playerScore = 0;
+  for (const m of candidates) {
+    aiScore += evaluatePoint(board, m.x, m.y, 'white');
+    playerScore += evaluatePoint(board, m.x, m.y, 'black');
+  }
+  return aiScore - playerScore;
 }
 
 function getCandidateMoves(board) {
@@ -389,6 +413,47 @@ function getCandidateMoves(board) {
   return candidates;
 }
 
+function sortCandidates(board, color) {
+  return getCandidateMoves(board)
+    .map((m) => ({ ...m, score: evaluatePoint(board, m.x, m.y, color) }))
+    .sort((a, b) => b.score - a.score);
+}
+
+function minimax(board, depth, maximizing, alpha, beta, lastMove, lastColor) {
+  if (lastMove && checkWinner(board, lastMove.x, lastMove.y, lastColor)) {
+    return lastColor === 'white' ? 900000 + depth : -900000 - depth;
+  }
+  if (depth === 0) return evaluateBoard(board);
+
+  const color = maximizing ? 'white' : 'black';
+  const moves = sortCandidates(board, color).slice(0, maximizing ? 8 : 7);
+  if (!moves.length) return evaluateBoard(board);
+
+  if (maximizing) {
+    let best = -Infinity;
+    for (const m of moves) {
+      board[m.y][m.x] = 'white';
+      const val = minimax(board, depth - 1, false, alpha, beta, m, 'white');
+      board[m.y][m.x] = null;
+      best = Math.max(best, val);
+      alpha = Math.max(alpha, best);
+      if (beta <= alpha) break;
+    }
+    return best;
+  }
+
+  let best = Infinity;
+  for (const m of moves) {
+    board[m.y][m.x] = 'black';
+    const val = minimax(board, depth - 1, true, alpha, beta, m, 'black');
+    board[m.y][m.x] = null;
+    best = Math.min(best, val);
+    beta = Math.min(beta, best);
+    if (beta <= alpha) break;
+  }
+  return best;
+}
+
 function aiPickMove(difficulty) {
   const candidates = getCandidateMoves(state.board);
   if (!candidates.length) return null;
@@ -408,21 +473,39 @@ function aiPickMove(difficulty) {
   }
 
   if (difficulty === 'easy') {
-    const randomPool = candidates.slice(0, Math.min(12, candidates.length));
-    return randomPool[Math.floor(Math.random() * randomPool.length)];
+    const sorted = sortCandidates(state.board, 'white').slice(0, 14);
+    return sorted[Math.floor(Math.random() * sorted.length)] || candidates[0];
   }
-
-  const scored = candidates.map((m) => ({
-    ...m,
-    score: evaluatePoint(state.board, m.x, m.y, 'white'),
-  })).sort((a, b) => b.score - a.score);
 
   if (difficulty === 'medium') {
-    const top = scored.slice(0, Math.min(4, scored.length));
-    return top[Math.floor(Math.random() * top.length)];
+    const sorted = sortCandidates(state.board, 'white').slice(0, 6);
+    let best = sorted[0];
+    let bestScore = -Infinity;
+    for (const m of sorted) {
+      state.board[m.y][m.x] = 'white';
+      const score = minimax(state.board, 1, false, -Infinity, Infinity, m, 'white');
+      state.board[m.y][m.x] = null;
+      if (score > bestScore) {
+        bestScore = score;
+        best = m;
+      }
+    }
+    return best;
   }
 
-  return scored[0];
+  const sorted = sortCandidates(state.board, 'white').slice(0, 8);
+  let best = sorted[0];
+  let bestScore = -Infinity;
+  for (const m of sorted) {
+    state.board[m.y][m.x] = 'white';
+    const score = minimax(state.board, 2, false, -Infinity, Infinity, m, 'white');
+    state.board[m.y][m.x] = null;
+    if (score > bestScore) {
+      bestScore = score;
+      best = m;
+    }
+  }
+  return best;
 }
 
 function consumeAiTurnTime() {
@@ -436,6 +519,7 @@ function finishGameOnBoard(message, returnText) {
   els.lastMoveHint.textContent = `${els.lastMoveHint.textContent}\n${message}`;
   els.returnAfterGameBtn.textContent = returnText;
   els.returnAfterGameBtn.classList.remove('hidden');
+  showResultModal(message);
   updateGameStatus();
 }
 
@@ -492,6 +576,7 @@ els.topBackBtn.addEventListener('click', goBack);
 els.changeNameBtn.addEventListener('click', resetIdentity);
 els.reselectModeComputerBtn.addEventListener('click', reselectMode);
 els.reselectModeLobbyBtn.addEventListener('click', reselectMode);
+els.closeResultModalBtn.addEventListener('click', hideResultModal);
 
 els.returnAfterGameBtn.addEventListener('click', () => {
   removeGameFromHistory();
@@ -527,6 +612,7 @@ els.startAiBtn.addEventListener('click', () => {
   state.lastMove = null;
   state.gameOver = false;
   els.returnAfterGameBtn.classList.add('hidden');
+  hideResultModal();
   state.aiClock = { playerMs: AI_TOTAL_MS, aiMs: AI_TOTAL_MS, turn: 'player', turnStartAt: Date.now() };
   goToView('game');
   els.lastMoveHint.textContent = '目前回合：玩家（黑棋）';
@@ -610,6 +696,7 @@ socket.on('game:started', ({ room, board, turn, colorByTag, remainingMs }) => {
   state.lastMove = null;
   state.gameOver = false;
   els.returnAfterGameBtn.classList.add('hidden');
+  hideResultModal();
   goToView('game');
   updateGameStatus();
   els.lastMoveHint.textContent = '對局開始';
@@ -664,6 +751,7 @@ socket.on('game:ended', ({ winnerTag, reason, loserTag, board, lastMove, room })
   els.lastMoveHint.textContent = `${els.lastMoveHint.textContent}\n${message}`;
   els.returnAfterGameBtn.textContent = state.gameType === 'multiplayer' ? '返回房間' : '返回模式設定';
   els.returnAfterGameBtn.classList.remove('hidden');
+  showResultModal(message);
   updateGameStatus();
 });
 
