@@ -48,6 +48,7 @@ h1 { margin: 4px 0 8px; font-size: clamp(32px, 5vw, 46px); }
   padding: 16px;
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
   margin-bottom: 12px;
+  overflow: hidden;
 }
 .single-screen {
   max-width: 860px;
@@ -114,14 +115,18 @@ input:focus, select:focus {
   grid-template-columns: minmax(0, 1fr) 330px;
   gap: 20px;
   align-items: start;
+  min-width: 0;
 }
 .board-wrap {
   display: flex;
   justify-content: center;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
 }
 .board {
-  width: min(100%, 740px);
-  max-width: calc(100vw - 44px);
+  width: 100%;
+  max-width: 740px;
   aspect-ratio: 1;
   display: grid;
   grid-template-columns: repeat(15, 1fr);
@@ -171,11 +176,12 @@ input:focus, select:focus {
   .mode-grid { grid-template-columns: 1fr; }
   .topbar { flex-direction: column; }
   .actions { width: 100%; }
+  .panel { padding: 10px; }
+  .board-wrap { width: 100%; }
   .board {
-    width: calc(100vw - 32px);
-    max-width: calc(100vw - 32px);
+    width: 100%;
+    max-width: 100%;
   }
-  .panel { padding: 12px; }
   .status { font-size: 22px; }
   .sub { font-size: 18px; }
 }
