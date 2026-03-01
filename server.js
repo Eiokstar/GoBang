@@ -26,6 +26,14 @@ const rooms = new Map(); // roomId -> room state
 
 const emptyBoard = () => Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
 
+function normalizeTimeLimitSec(raw) {
+  if (raw === null || raw === undefined || raw === '') return 300;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 300;
+  if (n <= 0) return 0;
+  return Math.max(30, Math.min(1800, Math.floor(n)));
+}
+
 function serializeRoom(room) {
   return {
     id: room.id,
@@ -137,6 +145,7 @@ function getTagByTurn(room) {
 
 function tickTurn(room) {
   clearRoomTimer(room);
+  if (!room.timeLimitSec) return;
   const currentTag = getTagByTurn(room);
   if (!currentTag) return;
   room.game.turnEndsAt = Date.now() + room.game.remainingMs[currentTag];
@@ -178,9 +187,12 @@ function startGame(room) {
     [whitePlayer.tag]: 'white',
   };
   room.game.turn = 'black';
-  room.game.remainingMs = {
+  room.game.remainingMs = room.timeLimitSec ? {
     [hostPlayer.tag]: room.timeLimitSec * 1000,
     [guestPlayer.tag]: room.timeLimitSec * 1000,
+  } : {
+    [hostPlayer.tag]: 0,
+    [guestPlayer.tag]: 0,
   };
 
   io.to(room.id).emit('game:started', {
@@ -219,7 +231,7 @@ io.on('connection', (socket) => {
       hostTag: player.tag,
       players: [{ tag: player.tag, socketId: socket.id }],
       ready: { [player.tag]: false },
-      timeLimitSec: Number(payload.timeLimitSec) || 300,
+      timeLimitSec: normalizeTimeLimitSec(payload.timeLimitSec),
       firstTurn: payload.firstTurn === 'guest' ? 'guest' : 'host',
       status: 'waiting',
       game: {
@@ -270,7 +282,7 @@ io.on('connection', (socket) => {
     const room = findRoomBySocket(socket.id);
     const player = players.get(socket.id);
     if (!room || !player || room.hostTag !== player.tag) return cb?.({ ok: false, error: '只有房主可設定' });
-    room.timeLimitSec = Math.max(30, Math.min(1800, Number(timeLimitSec) || 300));
+    room.timeLimitSec = normalizeTimeLimitSec(timeLimitSec);
     io.to(room.id).emit('room:updated', serializeRoom(room));
     broadcastRooms();
     cb?.({ ok: true });
@@ -323,8 +335,10 @@ io.on('connection', (socket) => {
     if (x < 0 || y < 0 || x >= BOARD_SIZE || y >= BOARD_SIZE) return cb?.({ ok: false, error: '超出範圍' });
     if (room.game.board[y][x]) return cb?.({ ok: false, error: '已有棋子' });
 
-    const elapsed = Date.now() - room.game.turnEndsAt + room.game.remainingMs[player.tag];
-    room.game.remainingMs[player.tag] = Math.max(0, room.game.remainingMs[player.tag] - elapsed);
+    if (room.timeLimitSec) {
+      const elapsed = Date.now() - room.game.turnEndsAt + room.game.remainingMs[player.tag];
+      room.game.remainingMs[player.tag] = Math.max(0, room.game.remainingMs[player.tag] - elapsed);
+    }
 
     room.game.board[y][x] = color;
     room.game.lastMove = { x, y, tag: player.tag };
@@ -382,6 +396,22 @@ io.on('connection', (socket) => {
       io.to(room.id).emit('room:updated', serializeRoom(room));
       broadcastRooms();
     }, 1500);
+    cb?.({ ok: true });
+  });
+
+
+  socket.on('room:chat', (text, cb) => {
+    const room = findRoomBySocket(socket.id);
+    const player = players.get(socket.id);
+    if (!room || !player || room.status !== 'playing') return cb?.({ ok: false, error: '目前不可聊天' });
+    const safeText = String(text || '').trim().slice(0, 200);
+    if (!safeText) return cb?.({ ok: false, error: '訊息不可為空' });
+    const message = {
+      tag: player.tag,
+      text: safeText,
+      time: new Date().toLocaleTimeString('zh-TW', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    };
+    io.to(room.id).emit('room:chat', message);
     cb?.({ ok: true });
   });
 

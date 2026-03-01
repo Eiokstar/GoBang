@@ -72,10 +72,12 @@
 
       <section id="lobbyCard" class="panel single-screen hidden">
         <h2>玩家大廳</h2>
+        <p class="sub note">思考時間：每位玩家本局可使用的總思考秒數；勾選「不限時」代表不啟用超時計敗。</p>
         <div class="form-grid">
           <input id="roomName" placeholder="房間名稱" maxlength="30" />
           <input id="roomPassword" placeholder="房間密碼（可留空）" maxlength="20" />
           <input id="roomTime" type="number" min="30" max="1800" value="300" />
+          <label class="checkline"><input id="roomNoLimit" type="checkbox" /> 不限時</label>
           <button id="createRoomBtn" class="btn primary">建立房間</button>
         </div>
         <div class="row"><button id="reselectModeLobbyBtn" class="btn secondary">重新選擇模式</button></div>
@@ -85,8 +87,10 @@
       <section id="roomCard" class="panel single-screen hidden">
         <h2>房間資訊</h2>
         <p id="roomInfo" class="sub"></p>
+        <p class="sub note">房主可調整每位玩家的總思考秒數；勾選「不限時」後，此房間不會因超時判敗。</p>
         <div class="form-grid">
           <input id="setRoomTime" type="number" min="30" max="1800" />
+          <label class="checkline"><input id="setRoomNoLimit" type="checkbox" /> 不限時</label>
           <select id="roomFirstTurn">
             <option value="host">房主先手（黑棋）</option>
             <option value="guest">加入者先手（黑棋）</option>
@@ -110,6 +114,14 @@
               <button id="surrenderBtn" class="btn danger">認輸 / 投降</button>
               <button id="returnAfterGameBtn" class="btn secondary hidden">返回房間</button>
             </div>
+            <section id="chatPanel" class="chat-panel hidden">
+              <h3>對戰聊天室</h3>
+              <ul id="chatMessages" class="chat-messages"></ul>
+              <div class="row">
+                <input id="chatInput" maxlength="200" placeholder="輸入訊息（最多 200 字）" />
+                <button id="sendChatBtn" class="btn primary">送出</button>
+              </div>
+            </section>
           </aside>
         </div>
       </section>

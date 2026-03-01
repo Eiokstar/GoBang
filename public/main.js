@@ -19,11 +19,13 @@ const els = {
   roomName: document.getElementById('roomName'),
   roomPassword: document.getElementById('roomPassword'),
   roomTime: document.getElementById('roomTime'),
+  roomNoLimit: document.getElementById('roomNoLimit'),
   roomInfo: document.getElementById('roomInfo'),
   roomPlayers: document.getElementById('roomPlayers'),
   readyBtn: document.getElementById('readyBtn'),
   leaveRoomBtn: document.getElementById('leaveRoomBtn'),
   setRoomTime: document.getElementById('setRoomTime'),
+  setRoomNoLimit: document.getElementById('setRoomNoLimit'),
   saveRoomTimeBtn: document.getElementById('saveRoomTimeBtn'),
   board: document.getElementById('board'),
   gameStatus: document.getElementById('gameStatus'),
@@ -43,6 +45,10 @@ const els = {
   resultModal: document.getElementById('resultModal'),
   resultMessage: document.getElementById('resultMessage'),
   closeResultModalBtn: document.getElementById('closeResultModalBtn'),
+  chatPanel: document.getElementById('chatPanel'),
+  chatMessages: document.getElementById('chatMessages'),
+  chatInput: document.getElementById('chatInput'),
+  sendChatBtn: document.getElementById('sendChatBtn'),
 };
 
 const views = {
@@ -91,6 +97,7 @@ const state = {
     turn: 'player',
     turnStartAt: 0,
   },
+  chatMessages: [],
 };
 
 let audioContext = null;
@@ -177,6 +184,10 @@ function resetIdentity() {
   els.nameInput.value = '';
   els.myTag.textContent = '';
   hideResultModal();
+  state.chatMessages = [];
+  renderChatMessages();
+  syncLobbyTimeUi();
+  els.chatPanel.classList.add('hidden');
   goToView('register', false);
 }
 
@@ -221,7 +232,7 @@ function renderRooms() {
   els.roomList.innerHTML = '';
   state.roomList.forEach((room) => {
     const li = document.createElement('li');
-    li.innerHTML = `<strong>${room.name}</strong><span>房主 ${room.hostTag}｜${room.players.length}/2｜${room.timeLimitSec}s｜${room.firstTurn === 'guest' ? '加入者先手' : '房主先手'}</span>`;
+    li.innerHTML = `<strong>${room.name}</strong><span>房主 ${room.hostTag}｜${room.players.length}/2｜${room.timeLimitSec ? `${room.timeLimitSec}s` : '不限時'}｜${room.firstTurn === 'guest' ? '加入者先手' : '房主先手'}</span>`;
     const btn = document.createElement('button');
     btn.textContent = '加入';
     btn.className = 'btn primary';
@@ -248,10 +259,11 @@ function updateRoomUI() {
   const room = state.currentRoom;
   const isHost = room.hostTag === state.myTag;
   els.roomInfo.textContent = `房間：${room.name}｜房主：${room.hostTag}｜狀態：${room.status}｜${room.firstTurn === 'guest' ? '加入者先手' : '房主先手'}`;
-  els.setRoomTime.value = room.timeLimitSec;
+  syncRoomTimeUi(room);
   els.roomFirstTurn.value = room.firstTurn || 'host';
   els.saveRoomTimeBtn.disabled = !isHost;
   els.saveFirstTurnBtn.disabled = !isHost;
+  els.chatPanel.classList.toggle('hidden', room.status !== 'playing');
 
   els.roomPlayers.innerHTML = '';
   room.players.forEach((p) => {
@@ -273,6 +285,34 @@ function updateRoomUI() {
   });
 }
 
+function renderChatMessages() {
+  els.chatMessages.innerHTML = '';
+  state.chatMessages.forEach((m) => {
+    const li = document.createElement('li');
+    li.innerHTML = `<div class="meta">${m.tag}｜${m.time}</div><div>${m.text}</div>`;
+    els.chatMessages.appendChild(li);
+  });
+  els.chatMessages.scrollTop = els.chatMessages.scrollHeight;
+}
+
+function appendChatMessage(message) {
+  state.chatMessages.push(message);
+  if (state.chatMessages.length > 80) state.chatMessages.shift();
+  renderChatMessages();
+}
+
+function syncRoomTimeUi(room) {
+  const noLimit = !room.timeLimitSec;
+  els.setRoomNoLimit.checked = noLimit;
+  els.setRoomTime.disabled = noLimit;
+  els.setRoomTime.value = room.timeLimitSec || 300;
+}
+
+function syncLobbyTimeUi() {
+  const noLimit = els.roomNoLimit.checked;
+  els.roomTime.disabled = noLimit;
+}
+
 function getTurnTag() {
   return Object.keys(state.colorByTag).find((tag) => state.colorByTag[tag] === state.turn) || '-';
 }
@@ -290,6 +330,11 @@ function updateGameStatus() {
   if (state.gameType === 'multiplayer') {
     const rem = currentRemainingForMultiplayer();
     const turnTag = getTurnTag();
+    const noLimit = !state.currentRoom?.timeLimitSec;
+    if (noLimit) {
+      els.gameStatus.textContent = `不限時對局\n目前回合：${turnTag}${state.gameOver ? '（已結束）' : ''}`;
+      return;
+    }
     const timerText = Object.entries(rem).map(([tag, ms]) => `${tag}: ${formatMs(ms)}`).join('｜');
     els.gameStatus.textContent = `${formatMs(rem[turnTag] || 0)}\n目前回合：${turnTag}${state.gameOver ? '（已結束）' : ''}\n${timerText}`;
     return;
@@ -614,6 +659,11 @@ els.reselectModeComputerBtn.addEventListener('click', reselectMode);
 els.reselectModeLobbyBtn.addEventListener('click', reselectMode);
 els.closeResultModalBtn.addEventListener('click', hideResultModal);
 els.undoAiBtn.addEventListener('click', undoAiMoves);
+els.roomNoLimit.addEventListener('change', syncLobbyTimeUi);
+els.setRoomNoLimit.addEventListener('change', () => {
+  els.setRoomTime.disabled = els.setRoomNoLimit.checked;
+});
+
 
 els.returnAfterGameBtn.addEventListener('click', () => {
   removeGameFromHistory();
@@ -657,6 +707,9 @@ els.startAiBtn.addEventListener('click', () => {
   els.undoAiBtn.classList.remove('hidden');
   els.returnAfterGameBtn.classList.add('hidden');
   hideResultModal();
+  state.chatMessages = [];
+  renderChatMessages();
+  els.chatPanel.classList.add('hidden');
   state.aiClock = { playerMs: AI_TOTAL_MS, aiMs: AI_TOTAL_MS, turn: state.aiFirstTurn === 'ai' ? 'ai' : 'player', turnStartAt: Date.now() };
   goToView('game');
   els.lastMoveHint.textContent = state.aiFirstTurn === 'ai' ? '電腦先手（黑棋）' : '玩家先手（黑棋）';
@@ -671,7 +724,7 @@ els.createRoomBtn.addEventListener('click', () => {
   socket.emit('room:create', {
     name: els.roomName.value,
     password: els.roomPassword.value,
-    timeLimitSec: Number(els.roomTime.value),
+    timeLimitSec: els.roomNoLimit.checked ? 0 : Number(els.roomTime.value),
     firstTurn: els.roomFirstTurn.value,
   }, (res) => {
     if (!res.ok) return alert(res.error);
@@ -693,7 +746,7 @@ els.leaveRoomBtn.addEventListener('click', () => {
 });
 
 els.saveRoomTimeBtn.addEventListener('click', () => {
-  socket.emit('room:set-time', Number(els.setRoomTime.value), (res) => {
+  socket.emit('room:set-time', els.setRoomNoLimit.checked ? 0 : Number(els.setRoomTime.value), (res) => {
     if (!res.ok) alert(res.error);
   });
 });
@@ -702,6 +755,23 @@ els.saveFirstTurnBtn.addEventListener('click', () => {
   socket.emit('room:set-first-turn', els.roomFirstTurn.value, (res) => {
     if (!res?.ok) alert(res?.error || '設定先後手失敗');
   });
+});
+
+els.sendChatBtn.addEventListener('click', () => {
+  if (state.gameType !== 'multiplayer' || !state.currentRoom || state.currentRoom.status !== 'playing') return;
+  const text = (els.chatInput.value || '').trim();
+  if (!text) return;
+  socket.emit('room:chat', text, (res) => {
+    if (!res?.ok) alert(res?.error || '訊息發送失敗');
+  });
+  els.chatInput.value = '';
+});
+
+els.chatInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    els.sendChatBtn.click();
+  }
 });
 
 els.surrenderBtn.addEventListener('click', () => {
@@ -737,6 +807,7 @@ socket.on('room:kicked', () => {
   state.currentRoom = null;
   state.gameOver = false;
   els.undoAiBtn.classList.add('hidden');
+  els.chatPanel.classList.add('hidden');
   goToView('lobby');
 });
 
@@ -753,6 +824,9 @@ socket.on('game:started', ({ room, board, turn, colorByTag, remainingMs }) => {
   els.undoAiBtn.classList.add('hidden');
   els.returnAfterGameBtn.classList.add('hidden');
   hideResultModal();
+  state.chatMessages = [];
+  renderChatMessages();
+  els.chatPanel.classList.remove('hidden');
   goToView('game');
   updateGameStatus();
   els.lastMoveHint.textContent = '對局開始';
@@ -787,6 +861,10 @@ socket.on('game:state', ({ board, turn, remainingMs, lastMove, room }) => {
   });
 });
 
+socket.on('room:chat', (message) => {
+  appendChatMessage(message);
+});
+
 socket.on('game:ended', ({ winnerTag, reason, loserTag, board, lastMove, room }) => {
   if (board) state.board = board;
   if (lastMove) state.lastMove = lastMove;
@@ -816,4 +894,5 @@ setInterval(() => {
   updateGameStatus();
 }, 250);
 
+syncLobbyTimeUi();
 goToView('register', false);

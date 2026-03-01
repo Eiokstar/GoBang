@@ -57,6 +57,7 @@ h1 { margin: 4px 0 8px; font-size: clamp(32px, 5vw, 46px); }
 }
 h2 { margin: 0 0 12px; font-size: clamp(28px, 4vw, 38px); }
 .sub { margin: 0 0 10px; color: var(--muted); font-size: 28px; line-height: 1.45; }
+.sub.note { font-size: 18px; color: #c7d2fe; }
 .status { margin: 0 0 14px; font-size: 30px; font-weight: 800; line-height: 1.45; white-space: pre-line; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 10px; margin-bottom: 8px; }
@@ -98,6 +99,24 @@ input:focus, select:focus {
 .mode { text-align: left; }
 .mode small { display: block; margin-top: 4px; opacity: .9; }
 .field { display: flex; flex-direction: column; gap: 6px; font-weight: 700; }
+.checkline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid #304676;
+  border-radius: 12px;
+  padding: 10px 12px;
+  min-height: 48px;
+  background: #0d1c42;
+  color: #dbeafe;
+  font-weight: 700;
+}
+.checkline input {
+  min-height: auto;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+}
 .list { list-style: none; margin: 0; padding: 0; }
 .list li {
   display: flex;
@@ -165,12 +184,48 @@ input:focus, select:focus {
   left: 39%;
 }
 .stack-buttons { display: grid; gap: 10px; margin-top: 14px; }
+.chat-panel {
+  margin-top: 18px;
+  border: 1px solid #2d426f;
+  border-radius: 12px;
+  padding: 10px;
+  background: #0b1b41;
+}
+.chat-panel h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.chat-messages {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 8px;
+  border: 1px solid #314872;
+  border-radius: 10px;
+  min-height: 150px;
+  max-height: 220px;
+  overflow-y: auto;
+  background: #081530;
+}
+.chat-messages li {
+  display: block;
+  border: none;
+  background: transparent;
+  margin: 0 0 8px;
+  padding: 0;
+  color: #dbeafe;
+  font-size: 14px;
+}
+.chat-messages li .meta {
+  color: #93c5fd;
+  font-size: 12px;
+}
 
 @media (max-width: 940px) {
   .game-layout { grid-template-columns: 1fr; }
   .game-panel { max-width: 680px; margin: 0 auto; width: 100%; }
   .status { font-size: 26px; }
   .sub { font-size: 22px; }
+  .sub.note { font-size: 16px; }
 }
 @media (max-width: 760px) {
   .mode-grid { grid-template-columns: 1fr; }
@@ -184,6 +239,7 @@ input:focus, select:focus {
   }
   .status { font-size: 22px; }
   .sub { font-size: 18px; }
+  .sub.note { font-size: 15px; }
 }
 
 
