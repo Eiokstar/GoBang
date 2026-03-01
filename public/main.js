@@ -100,6 +100,7 @@ const state = {
   },
   chatMessages: [],
   registerPending: false,
+  registerPendingTimer: null,
 };
 
 let audioContext = null;
@@ -195,8 +196,7 @@ function resetIdentity() {
   els.undoAiBtn.classList.add('hidden');
   els.nameInput.value = '';
   els.myTag.textContent = '';
-  state.registerPending = false;
-  els.registerBtn.disabled = false;
+  resetRegisterPending();
   hideResultModal();
   state.chatMessages = [];
   renderChatMessages();
@@ -690,6 +690,15 @@ els.returnAfterGameBtn.addEventListener('click', () => {
   goToView(returnView, false);
 });
 
+function resetRegisterPending() {
+  state.registerPending = false;
+  if (state.registerPendingTimer) {
+    clearTimeout(state.registerPendingTimer);
+    state.registerPendingTimer = null;
+  }
+  els.registerBtn.disabled = false;
+}
+
 function submitRegister() {
   if (state.registerPending) return;
   const baseName = (els.nameInput.value || '').trim();
@@ -700,9 +709,14 @@ function submitRegister() {
 
   state.registerPending = true;
   els.registerBtn.disabled = true;
+  state.registerPendingTimer = setTimeout(() => {
+    if (!state.registerPending) return;
+    resetRegisterPending();
+    alert('連線逾時，請再試一次');
+  }, 8000);
+
   socket.emit('player:register', baseName, (res) => {
-    state.registerPending = false;
-    els.registerBtn.disabled = false;
+    resetRegisterPending();
     if (!res?.ok) return alert(res?.error || '建立玩家失敗');
     state.myTag = res.tag;
     els.myTag.textContent = `你的玩家標籤：${res.tag}`;
@@ -828,6 +842,19 @@ els.surrenderBtn.addEventListener('click', () => {
     return;
   }
   finishGameOnBoard('你已投降', '返回模式設定');
+});
+
+
+socket.on('disconnect', () => {
+  if (!state.registerPending) return;
+  resetRegisterPending();
+  alert('連線中斷，請確認網路後再建立玩家');
+});
+
+socket.on('connect_error', () => {
+  if (!state.registerPending) return;
+  resetRegisterPending();
+  alert('無法連線伺服器，請稍後再試');
 });
 
 socket.on('room:list', (rooms) => {
