@@ -99,6 +99,7 @@ const state = {
     turnStartAt: 0,
   },
   chatMessages: [],
+  registerPending: false,
 };
 
 let audioContext = null;
@@ -194,6 +195,8 @@ function resetIdentity() {
   els.undoAiBtn.classList.add('hidden');
   els.nameInput.value = '';
   els.myTag.textContent = '';
+  state.registerPending = false;
+  els.registerBtn.disabled = false;
   hideResultModal();
   state.chatMessages = [];
   renderChatMessages();
@@ -687,9 +690,20 @@ els.returnAfterGameBtn.addEventListener('click', () => {
   goToView(returnView, false);
 });
 
-els.registerBtn.addEventListener('click', () => {
-  socket.emit('player:register', els.nameInput.value, (res) => {
-    if (!res.ok) return alert(res.error);
+function submitRegister() {
+  if (state.registerPending) return;
+  const baseName = (els.nameInput.value || '').trim();
+  if (!baseName) {
+    alert('請先輸入名稱');
+    return;
+  }
+
+  state.registerPending = true;
+  els.registerBtn.disabled = true;
+  socket.emit('player:register', baseName, (res) => {
+    state.registerPending = false;
+    els.registerBtn.disabled = false;
+    if (!res?.ok) return alert(res?.error || '建立玩家失敗');
     state.myTag = res.tag;
     els.myTag.textContent = `你的玩家標籤：${res.tag}`;
     els.playerBadge.textContent = res.tag;
@@ -697,12 +711,18 @@ els.registerBtn.addEventListener('click', () => {
     els.changeNameBtn.classList.remove('hidden');
     goToView('menu');
   });
-});
+}
+
+els.registerBtn.addEventListener('click', submitRegister);
+els.registerBtn.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  submitRegister();
+}, { passive: false });
 
 els.nameInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     e.preventDefault();
-    els.registerBtn.click();
+    submitRegister();
   }
 });
 
