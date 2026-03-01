@@ -428,6 +428,18 @@ io.on('connection', (socket) => {
       clearRoomTimer(room);
       rooms.delete(room.id);
     } else {
+      if (room.status === 'playing') {
+        const winnerTag = room.players[0]?.tag;
+        room.status = 'finished';
+        clearRoomTimer(room);
+        io.to(room.id).emit('game:ended', {
+          room: serializeRoom(room),
+          board: room.game.board,
+          winnerTag,
+          reason: 'disconnect',
+          loserTag: player.tag,
+        });
+      }
       if (room.hostTag === player.tag) {
         room.hostTag = room.players[0].tag;
       }
@@ -450,6 +462,18 @@ io.on('connection', (socket) => {
       clearRoomTimer(room);
       rooms.delete(room.id);
     } else {
+      if (room.status === 'playing') {
+        const winnerTag = room.players[0]?.tag;
+        room.status = 'finished';
+        clearRoomTimer(room);
+        io.to(room.id).emit('game:ended', {
+          room: serializeRoom(room),
+          board: room.game.board,
+          winnerTag,
+          reason: 'disconnect',
+          loserTag: player.tag,
+        });
+      }
       if (room.hostTag === player.tag) room.hostTag = room.players[0].tag;
       clearRoomTimer(room);
       resetGameState(room);

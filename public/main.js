@@ -699,6 +699,13 @@ els.registerBtn.addEventListener('click', () => {
   });
 });
 
+els.nameInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    els.registerBtn.click();
+  }
+});
+
 document.querySelectorAll('[data-mode]').forEach((btn) => {
   btn.addEventListener('click', () => {
     const mode = btn.getAttribute('data-mode');
@@ -898,6 +905,7 @@ socket.on('game:ended', ({ winnerTag, reason, loserTag, board, lastMove, room })
   let message = '結果：平局';
   if (reason === 'surrender') message = `結果：${loserTag} 投降，${winnerTag} 獲勝`;
   else if (reason === 'timeout') message = `結果：${loserTag} 超時，${winnerTag} 獲勝`;
+  else if (reason === 'disconnect') message = `結果：${loserTag} 斷線，${winnerTag} 獲勝`;
   else if (winnerTag) message = `結果：${winnerTag} 五連珠獲勝`;
 
   els.lastMoveHint.textContent = `${els.lastMoveHint.textContent}\n${message}`;
