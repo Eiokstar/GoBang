@@ -36,6 +36,10 @@ const els = {
   returnAfterGameBtn: document.getElementById('returnAfterGameBtn'),
   reselectModeComputerBtn: document.getElementById('reselectModeComputerBtn'),
   reselectModeLobbyBtn: document.getElementById('reselectModeLobbyBtn'),
+  aiFirstTurn: document.getElementById('aiFirstTurn'),
+  roomFirstTurn: document.getElementById('roomFirstTurn'),
+  saveFirstTurnBtn: document.getElementById('saveFirstTurnBtn'),
+  undoAiBtn: document.getElementById('undoAiBtn'),
   resultModal: document.getElementById('resultModal'),
   resultMessage: document.getElementById('resultMessage'),
   closeResultModalBtn: document.getElementById('closeResultModalBtn'),
@@ -76,6 +80,11 @@ const state = {
   history: [],
   gameOver: false,
   pendingRoomAfterGame: null,
+  aiFirstTurn: 'player',
+  aiMoveHistory: [],
+  aiThinking: false,
+  aiHasMoved: false,
+  aiColor: 'white',
   aiClock: {
     playerMs: AI_TOTAL_MS,
     aiMs: AI_TOTAL_MS,
@@ -164,6 +173,7 @@ function resetIdentity() {
   els.playerBadge.classList.add('hidden');
   els.changeNameBtn.classList.add('hidden');
   els.returnAfterGameBtn.classList.add('hidden');
+  els.undoAiBtn.classList.add('hidden');
   els.nameInput.value = '';
   els.myTag.textContent = '';
   hideResultModal();
@@ -211,7 +221,7 @@ function renderRooms() {
   els.roomList.innerHTML = '';
   state.roomList.forEach((room) => {
     const li = document.createElement('li');
-    li.innerHTML = `<strong>${room.name}</strong><span>房主 ${room.hostTag}｜${room.players.length}/2｜${room.timeLimitSec}s</span>`;
+    li.innerHTML = `<strong>${room.name}</strong><span>房主 ${room.hostTag}｜${room.players.length}/2｜${room.timeLimitSec}s｜${room.firstTurn === 'guest' ? '加入者先手' : '房主先手'}</span>`;
     const btn = document.createElement('button');
     btn.textContent = '加入';
     btn.className = 'btn primary';
@@ -237,9 +247,11 @@ function updateRoomUI() {
   if (!state.currentRoom) return;
   const room = state.currentRoom;
   const isHost = room.hostTag === state.myTag;
-  els.roomInfo.textContent = `房間：${room.name}｜房主：${room.hostTag}｜狀態：${room.status}`;
+  els.roomInfo.textContent = `房間：${room.name}｜房主：${room.hostTag}｜狀態：${room.status}｜${room.firstTurn === 'guest' ? '加入者先手' : '房主先手'}`;
   els.setRoomTime.value = room.timeLimitSec;
+  els.roomFirstTurn.value = room.firstTurn || 'host';
   els.saveRoomTimeBtn.disabled = !isHost;
+  els.saveFirstTurnBtn.disabled = !isHost;
 
   els.roomPlayers.innerHTML = '';
   room.players.forEach((p) => {
@@ -284,15 +296,12 @@ function updateGameStatus() {
   }
 
   if (state.gameType === 'ai') {
-    const elapsed = Math.max(0, Date.now() - state.aiClock.turnStartAt);
-    const playerMs = state.aiClock.turn === 'player' && !state.gameOver
-      ? Math.max(0, state.aiClock.playerMs - elapsed)
-      : state.aiClock.playerMs;
-    const aiMs = state.aiClock.turn === 'ai' && !state.gameOver
-      ? Math.max(0, state.aiClock.aiMs - elapsed)
-      : state.aiClock.aiMs;
-
-    els.gameStatus.textContent = `${formatMs(playerMs)}\n玩家 VS ${els.aiDifficulty.options[els.aiDifficulty.selectedIndex].text}AI\n${formatMs(aiMs)}\n目前回合：${state.aiClock.turn === 'player' ? '玩家' : 'AI'}${state.gameOver ? '（已結束）' : ''}`;
+    const aiName = `${els.aiDifficulty.options[els.aiDifficulty.selectedIndex].text}AI`;
+    const turnLabel = state.gameOver
+      ? '對局結束'
+      : (state.aiClock.turn === 'player' ? '玩家' : 'AI');
+    els.gameStatus.textContent = `玩家 VS ${aiName}
+目前回合：${turnLabel}`;
   }
 }
 
@@ -473,8 +482,10 @@ function aiPickMove(difficulty) {
   }
 
   if (difficulty === 'easy') {
-    const sorted = sortCandidates(state.board, 'white').slice(0, 14);
-    return sorted[Math.floor(Math.random() * sorted.length)] || candidates[0];
+    const sorted = sortCandidates(state.board, 'white').slice(0, 5);
+    if (!sorted.length) return candidates[0];
+    if (Math.random() < 0.7) return sorted[0];
+    return sorted[Math.floor(Math.random() * sorted.length)];
   }
 
   if (difficulty === 'medium') {
@@ -509,9 +520,7 @@ function aiPickMove(difficulty) {
 }
 
 function consumeAiTurnTime() {
-  const elapsed = Math.max(0, Date.now() - state.aiClock.turnStartAt);
-  if (state.aiClock.turn === 'player') state.aiClock.playerMs = Math.max(0, state.aiClock.playerMs - elapsed);
-  else state.aiClock.aiMs = Math.max(0, state.aiClock.aiMs - elapsed);
+  // AI 模式不使用倒數計時
 }
 
 function finishGameOnBoard(message, returnText) {
@@ -524,52 +533,79 @@ function finishGameOnBoard(message, returnText) {
 }
 
 function aiMove() {
-  consumeAiTurnTime();
+  if (state.gameOver) return;
+  state.aiThinking = true;
   state.aiClock.turn = 'ai';
-  state.aiClock.turnStartAt = Date.now();
 
   const pick = aiPickMove(state.aiDifficulty);
-  if (!pick) return;
+  if (!pick) {
+    state.aiThinking = false;
+    return;
+  }
   const { x, y } = pick;
 
-  state.board[y][x] = 'white';
+  state.board[y][x] = state.aiColor;
   state.lastMove = { x, y, tag: 'AI' };
+  state.aiMoveHistory.push({ x, y, color: state.aiColor, tag: 'AI' });
+  state.aiHasMoved = true;
   playStoneSound();
 
-  consumeAiTurnTime();
   state.aiClock.turn = 'player';
-  state.aiClock.turnStartAt = Date.now();
+  state.aiThinking = false;
 
   renderBoard(playerMoveAi);
   els.lastMoveHint.textContent = `上一手：AI 落在 (${x + 1}, ${y + 1})`;
   updateGameStatus();
 
-  if (checkWinner(state.board, x, y, 'white')) {
+  if (checkWinner(state.board, x, y, state.aiColor)) {
     finishGameOnBoard('結果：AI 獲勝', '返回模式設定');
   }
 }
 
 function playerMoveAi(x, y) {
-  if (state.board[y][x] || state.gameOver) return;
+  if (state.board[y][x] || state.gameOver || state.aiThinking || state.aiClock.turn !== 'player') return;
 
-  consumeAiTurnTime();
-  state.board[y][x] = 'black';
+  const playerColor = state.aiColor === 'white' ? 'black' : 'white';
+  state.board[y][x] = playerColor;
   state.lastMove = { x, y, tag: state.myTag || '玩家' };
+  state.aiMoveHistory.push({ x, y, color: playerColor, tag: state.myTag || '玩家' });
   playStoneSound();
 
   state.aiClock.turn = 'ai';
-  state.aiClock.turnStartAt = Date.now();
 
   renderBoard(playerMoveAi);
   els.lastMoveHint.textContent = `上一手：${state.myTag || '玩家'} 落在 (${x + 1}, ${y + 1})，輪到 AI`;
   updateGameStatus();
 
-  if (checkWinner(state.board, x, y, 'black')) {
+  if (checkWinner(state.board, x, y, playerColor)) {
     finishGameOnBoard('結果：你獲勝', '返回模式設定');
     return;
   }
 
-  setTimeout(aiMove, state.aiDifficulty === 'hard' ? 220 : 480);
+  setTimeout(aiMove, state.aiDifficulty === 'hard' ? 160 : 340);
+}
+
+function undoAiMoves() {
+  if (state.gameType !== 'ai' || state.gameOver || state.aiThinking) return;
+  if (state.aiMoveHistory.length < 2) {
+    alert('目前無法悔棋（至少要下完雙方各一步）');
+    return;
+  }
+
+  const last = state.aiMoveHistory.pop();
+  const prev = state.aiMoveHistory.pop();
+  state.board[last.y][last.x] = null;
+  state.board[prev.y][prev.x] = null;
+  state.lastMove = state.aiMoveHistory[state.aiMoveHistory.length - 1] || null;
+  state.aiClock.turn = 'player';
+
+  renderBoard(playerMoveAi);
+  if (state.lastMove) {
+    els.lastMoveHint.textContent = `已悔棋：回到 ${state.lastMove.tag} 在 (${state.lastMove.x + 1}, ${state.lastMove.y + 1}) 之後`;
+  } else {
+    els.lastMoveHint.textContent = '已悔棋：回到開局';
+  }
+  updateGameStatus();
 }
 
 els.topBackBtn.addEventListener('click', goBack);
@@ -577,11 +613,13 @@ els.changeNameBtn.addEventListener('click', resetIdentity);
 els.reselectModeComputerBtn.addEventListener('click', reselectMode);
 els.reselectModeLobbyBtn.addEventListener('click', reselectMode);
 els.closeResultModalBtn.addEventListener('click', hideResultModal);
+els.undoAiBtn.addEventListener('click', undoAiMoves);
 
 els.returnAfterGameBtn.addEventListener('click', () => {
   removeGameFromHistory();
   els.returnAfterGameBtn.classList.add('hidden');
   const returnView = state.gameType === 'multiplayer' ? 'room' : 'computer';
+  if (returnView !== 'game') els.undoAiBtn.classList.add('hidden');
   goToView(returnView, false);
 });
 
@@ -611,13 +649,22 @@ els.startAiBtn.addEventListener('click', () => {
   state.board = Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(null));
   state.lastMove = null;
   state.gameOver = false;
+  state.aiMoveHistory = [];
+  state.aiHasMoved = false;
+  state.aiThinking = false;
+  state.aiFirstTurn = els.aiFirstTurn.value;
+  state.aiColor = state.aiFirstTurn === 'ai' ? 'black' : 'white';
+  els.undoAiBtn.classList.remove('hidden');
   els.returnAfterGameBtn.classList.add('hidden');
   hideResultModal();
-  state.aiClock = { playerMs: AI_TOTAL_MS, aiMs: AI_TOTAL_MS, turn: 'player', turnStartAt: Date.now() };
+  state.aiClock = { playerMs: AI_TOTAL_MS, aiMs: AI_TOTAL_MS, turn: state.aiFirstTurn === 'ai' ? 'ai' : 'player', turnStartAt: Date.now() };
   goToView('game');
-  els.lastMoveHint.textContent = '目前回合：玩家（黑棋）';
+  els.lastMoveHint.textContent = state.aiFirstTurn === 'ai' ? '電腦先手（黑棋）' : '玩家先手（黑棋）';
   renderBoard(playerMoveAi);
   updateGameStatus();
+  if (state.aiFirstTurn === 'ai') {
+    setTimeout(aiMove, 260);
+  }
 });
 
 els.createRoomBtn.addEventListener('click', () => {
@@ -625,6 +672,7 @@ els.createRoomBtn.addEventListener('click', () => {
     name: els.roomName.value,
     password: els.roomPassword.value,
     timeLimitSec: Number(els.roomTime.value),
+    firstTurn: els.roomFirstTurn.value,
   }, (res) => {
     if (!res.ok) return alert(res.error);
     state.currentRoom = res.room;
@@ -647,6 +695,12 @@ els.leaveRoomBtn.addEventListener('click', () => {
 els.saveRoomTimeBtn.addEventListener('click', () => {
   socket.emit('room:set-time', Number(els.setRoomTime.value), (res) => {
     if (!res.ok) alert(res.error);
+  });
+});
+
+els.saveFirstTurnBtn.addEventListener('click', () => {
+  socket.emit('room:set-first-turn', els.roomFirstTurn.value, (res) => {
+    if (!res?.ok) alert(res?.error || '設定先後手失敗');
   });
 });
 
@@ -682,6 +736,7 @@ socket.on('room:kicked', () => {
   alert('你已被房主踢出房間');
   state.currentRoom = null;
   state.gameOver = false;
+  els.undoAiBtn.classList.add('hidden');
   goToView('lobby');
 });
 
@@ -695,6 +750,7 @@ socket.on('game:started', ({ room, board, turn, colorByTag, remainingMs }) => {
   state.syncAt = Date.now();
   state.lastMove = null;
   state.gameOver = false;
+  els.undoAiBtn.classList.add('hidden');
   els.returnAfterGameBtn.classList.add('hidden');
   hideResultModal();
   goToView('game');

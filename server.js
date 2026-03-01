@@ -36,6 +36,7 @@ function serializeRoom(room) {
     ready: room.ready,
     timeLimitSec: room.timeLimitSec,
     status: room.status,
+    firstTurn: room.firstTurn || 'host',
   };
 }
 
@@ -167,15 +168,19 @@ function startGame(room) {
   room.game.lastMove = null;
   room.game.winner = null;
 
-  const [p1, p2] = room.players;
+  const hostPlayer = room.players.find((p) => p.tag === room.hostTag) || room.players[0];
+  const guestPlayer = room.players.find((p) => p.tag !== hostPlayer.tag) || room.players[1];
+  const blackPlayer = room.firstTurn === 'guest' ? guestPlayer : hostPlayer;
+  const whitePlayer = blackPlayer.tag === hostPlayer.tag ? guestPlayer : hostPlayer;
+
   room.game.colorByTag = {
-    [p1.tag]: 'black',
-    [p2.tag]: 'white',
+    [blackPlayer.tag]: 'black',
+    [whitePlayer.tag]: 'white',
   };
   room.game.turn = 'black';
   room.game.remainingMs = {
-    [p1.tag]: room.timeLimitSec * 1000,
-    [p2.tag]: room.timeLimitSec * 1000,
+    [hostPlayer.tag]: room.timeLimitSec * 1000,
+    [guestPlayer.tag]: room.timeLimitSec * 1000,
   };
 
   io.to(room.id).emit('game:started', {
@@ -215,6 +220,7 @@ io.on('connection', (socket) => {
       players: [{ tag: player.tag, socketId: socket.id }],
       ready: { [player.tag]: false },
       timeLimitSec: Number(payload.timeLimitSec) || 300,
+      firstTurn: payload.firstTurn === 'guest' ? 'guest' : 'host',
       status: 'waiting',
       game: {
         board: emptyBoard(),
@@ -247,6 +253,17 @@ io.on('connection', (socket) => {
     io.to(room.id).emit('room:updated', serializeRoom(room));
     cb?.({ ok: true, room: serializeRoom(room) });
     broadcastRooms();
+  });
+
+  socket.on('room:set-first-turn', (firstTurn, cb) => {
+    const room = findRoomBySocket(socket.id);
+    const player = players.get(socket.id);
+    if (!room || !player || room.hostTag !== player.tag) return cb?.({ ok: false, error: '只有房主可設定先後手' });
+    if (room.status !== 'waiting') return cb?.({ ok: false, error: '遊戲進行中不可更改' });
+    room.firstTurn = firstTurn === 'guest' ? 'guest' : 'host';
+    io.to(room.id).emit('room:updated', serializeRoom(room));
+    broadcastRooms();
+    cb?.({ ok: true });
   });
 
   socket.on('room:set-time', (timeLimitSec, cb) => {

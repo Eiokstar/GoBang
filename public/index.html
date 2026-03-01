@@ -58,6 +58,12 @@
             <option value="hard">困難</option>
           </select>
         </label>
+        <label class="field">先手方
+          <select id="aiFirstTurn">
+            <option value="player">玩家先手（黑棋）</option>
+            <option value="ai">電腦先手（黑棋）</option>
+          </select>
+        </label>
         <div class="row">
           <button id="startAiBtn" class="btn primary">開始對戰</button>
           <button id="reselectModeComputerBtn" class="btn secondary">重新選擇模式</button>
@@ -81,7 +87,12 @@
         <p id="roomInfo" class="sub"></p>
         <div class="form-grid">
           <input id="setRoomTime" type="number" min="30" max="1800" />
+          <select id="roomFirstTurn">
+            <option value="host">房主先手（黑棋）</option>
+            <option value="guest">加入者先手（黑棋）</option>
+          </select>
           <button id="saveRoomTimeBtn" class="btn primary">房主套用時間</button>
+          <button id="saveFirstTurnBtn" class="btn primary">房主套用先後手</button>
           <button id="readyBtn" class="btn primary">準備</button>
           <button id="leaveRoomBtn" class="btn secondary">離開房間</button>
         </div>
@@ -95,6 +106,7 @@
             <p id="gameStatus" class="status"></p>
             <p id="lastMoveHint" class="sub"></p>
             <div class="stack-buttons">
+              <button id="undoAiBtn" class="btn secondary hidden">悔棋（雙方各一步）</button>
               <button id="surrenderBtn" class="btn danger">認輸 / 投降</button>
               <button id="returnAfterGameBtn" class="btn secondary hidden">返回房間</button>
             </div>
