@@ -1,0 +1,16 @@
+{
+  "name": "gobang-web",
+  "version": "1.0.0",
+  "description": "Web Gobang with AI and multiplayer rooms",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "check": "node --check server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5",
+    "sqlite3": "^5.1.7"
+  }
+}
