@@ -58,7 +58,10 @@
             <option value="hard">困難</option>
           </select>
         </label>
-        <div class="row"><button id="startAiBtn" class="btn primary">開始對戰</button></div>
+        <div class="row">
+          <button id="startAiBtn" class="btn primary">開始對戰</button>
+          <button id="reselectModeComputerBtn" class="btn secondary">重新選擇模式</button>
+        </div>
       </section>
 
       <section id="lobbyCard" class="panel single-screen hidden">
@@ -69,6 +72,7 @@
           <input id="roomTime" type="number" min="30" max="1800" value="300" />
           <button id="createRoomBtn" class="btn primary">建立房間</button>
         </div>
+        <div class="row"><button id="reselectModeLobbyBtn" class="btn secondary">重新選擇模式</button></div>
         <ul id="roomList" class="list"></ul>
       </section>
 
@@ -92,6 +96,7 @@
             <p id="lastMoveHint" class="sub"></p>
             <div class="stack-buttons">
               <button id="surrenderBtn" class="btn danger">認輸 / 投降</button>
+              <button id="returnAfterGameBtn" class="btn secondary hidden">返回房間</button>
             </div>
           </aside>
         </div>
