@@ -21,6 +21,10 @@ const els = {
   roomTime: document.getElementById('roomTime'),
   roomNoLimit: document.getElementById('roomNoLimit'),
   roomInfo: document.getElementById('roomInfo'),
+  roomNameInfo: document.getElementById('roomNameInfo'),
+  roomHostInfo: document.getElementById('roomHostInfo'),
+  roomStatusInfo: document.getElementById('roomStatusInfo'),
+  roomFirstInfo: document.getElementById('roomFirstInfo'),
   roomPlayers: document.getElementById('roomPlayers'),
   readyBtn: document.getElementById('readyBtn'),
   leaveRoomBtn: document.getElementById('leaveRoomBtn'),
@@ -266,7 +270,10 @@ function updateRoomUI() {
   if (!state.currentRoom) return;
   const room = state.currentRoom;
   const isHost = room.hostTag === state.myTag;
-  els.roomInfo.textContent = `房間：${room.name}｜房主：${room.hostTag}｜狀態：${room.status}｜${room.firstTurn === 'guest' ? '加入者先手' : '房主先手'}`;
+  els.roomNameInfo.textContent = room.name;
+  els.roomHostInfo.textContent = room.hostTag;
+  els.roomStatusInfo.textContent = room.status;
+  els.roomFirstInfo.textContent = room.firstTurn === 'guest' ? '加入者先手' : '房主先手';
   syncRoomTimeUi(room);
   els.roomFirstTurn.value = room.firstTurn || 'host';
   els.saveRoomTimeBtn.disabled = !isHost;

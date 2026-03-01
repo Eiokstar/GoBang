@@ -86,20 +86,34 @@
 
       <section id="roomCard" class="panel single-screen hidden">
         <h2>房間資訊</h2>
-        <p id="roomInfo" class="sub"></p>
-        <p class="sub note">房主可調整每位玩家的總思考秒數；勾選「不限時」後，此房間不會因超時判敗。</p>
-        <div class="form-grid">
-          <input id="setRoomTime" type="number" min="30" max="1800" />
-          <label class="checkline"><input id="setRoomNoLimit" type="checkbox" /> 不限時</label>
-          <select id="roomFirstTurn">
-            <option value="host">房主先手（黑棋）</option>
-            <option value="guest">加入者先手（黑棋）</option>
-          </select>
-          <button id="saveRoomTimeBtn" class="btn primary">房主套用時間</button>
-          <button id="saveFirstTurnBtn" class="btn primary">房主套用先後手</button>
-          <button id="readyBtn" class="btn primary">準備</button>
+        <div id="roomInfo" class="room-summary">
+          <div class="room-pill"><span class="label">房間</span><strong id="roomNameInfo">-</strong></div>
+          <div class="room-pill"><span class="label">房主</span><strong id="roomHostInfo">-</strong></div>
+          <div class="room-pill"><span class="label">狀態</span><strong id="roomStatusInfo">-</strong></div>
+          <div class="room-pill"><span class="label">先手</span><strong id="roomFirstInfo">-</strong></div>
+        </div>
+
+        <div class="room-block">
+          <h3>對局設定（房主）</h3>
+          <p class="sub note">可調整每位玩家的總思考秒數與先手方；勾選「不限時」後，此房間不會因超時判敗。</p>
+          <div class="form-grid room-setting-grid">
+            <input id="setRoomTime" type="number" min="30" max="1800" />
+            <label class="checkline"><input id="setRoomNoLimit" type="checkbox" /> 不限時</label>
+            <select id="roomFirstTurn">
+              <option value="host">房主先手（黑棋）</option>
+              <option value="guest">加入者先手（黑棋）</option>
+            </select>
+            <button id="saveRoomTimeBtn" class="btn primary">套用思考時間</button>
+            <button id="saveFirstTurnBtn" class="btn primary">套用先後手</button>
+          </div>
+        </div>
+
+        <div class="row room-actions">
+          <button id="readyBtn" class="btn primary">準備 / 取消準備</button>
           <button id="leaveRoomBtn" class="btn secondary">離開房間</button>
         </div>
+
+        <h3 class="room-players-title">房內玩家</h3>
         <ul id="roomPlayers" class="list"></ul>
       </section>
 

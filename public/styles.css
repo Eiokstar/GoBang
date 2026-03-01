@@ -129,6 +129,46 @@ input:focus, select:focus {
   margin-top: 8px;
   background: #0b1b41;
 }
+
+.room-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.room-pill {
+  border: 1px solid #2d426f;
+  background: #0b1b41;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.room-pill .label {
+  display: block;
+  color: #93c5fd;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+.room-pill strong {
+  font-size: 18px;
+}
+.room-block {
+  border: 1px solid #2d426f;
+  border-radius: 14px;
+  padding: 12px;
+  background: #09183a;
+  margin-bottom: 12px;
+}
+.room-block h3,
+.room-players-title {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+.room-setting-grid {
+  margin-bottom: 0;
+}
+.room-actions {
+  margin-bottom: 8px;
+}
 .game-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 330px;
