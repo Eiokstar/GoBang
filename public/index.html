@@ -76,8 +76,16 @@
         <div class="form-grid">
           <input id="roomName" placeholder="房間名稱" maxlength="30" />
           <input id="roomPassword" placeholder="房間密碼（可留空）" maxlength="20" />
-          <input id="roomTime" type="number" min="30" max="1800" value="300" />
-          <label class="checkline"><input id="roomNoLimit" type="checkbox" /> 不限時</label>
+          <select id="roomTime">
+            <option value="0">不限時</option>
+            <option value="60">60 秒</option>
+            <option value="180">180 秒</option>
+            <option value="300" selected>300 秒</option>
+            <option value="600">600 秒</option>
+            <option value="900">900 秒</option>
+            <option value="1200">1200 秒</option>
+            <option value="1800">1800 秒</option>
+          </select>
           <button id="createRoomBtn" class="btn primary">建立房間</button>
         </div>
         <div class="row"><button id="reselectModeLobbyBtn" class="btn secondary">重新選擇模式</button></div>
@@ -93,18 +101,24 @@
           <div class="room-pill"><span class="label">先手</span><strong id="roomFirstInfo">-</strong></div>
         </div>
 
-        <div class="room-block">
+        <div id="roomHostSettings" class="room-block">
           <h3>對局設定（房主）</h3>
-          <p class="sub note">可調整每位玩家的總思考秒數與先手方；勾選「不限時」後，此房間不會因超時判敗。</p>
+          <p class="sub note">可直接選擇每位玩家總思考秒數與先手方（變更會立即套用）。</p>
           <div class="form-grid room-setting-grid">
-            <input id="setRoomTime" type="number" min="30" max="1800" />
-            <label class="checkline"><input id="setRoomNoLimit" type="checkbox" /> 不限時</label>
+            <select id="setRoomTime">
+              <option value="0">不限時</option>
+              <option value="60">60 秒</option>
+              <option value="180">180 秒</option>
+              <option value="300">300 秒</option>
+              <option value="600">600 秒</option>
+              <option value="900">900 秒</option>
+              <option value="1200">1200 秒</option>
+              <option value="1800">1800 秒</option>
+            </select>
             <select id="roomFirstTurn">
               <option value="host">房主先手（黑棋）</option>
               <option value="guest">加入者先手（黑棋）</option>
             </select>
-            <button id="saveRoomTimeBtn" class="btn primary">套用思考時間</button>
-            <button id="saveFirstTurnBtn" class="btn primary">套用先後手</button>
           </div>
         </div>
 

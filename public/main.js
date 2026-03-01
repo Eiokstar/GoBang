@@ -19,18 +19,16 @@ const els = {
   roomName: document.getElementById('roomName'),
   roomPassword: document.getElementById('roomPassword'),
   roomTime: document.getElementById('roomTime'),
-  roomNoLimit: document.getElementById('roomNoLimit'),
   roomInfo: document.getElementById('roomInfo'),
   roomNameInfo: document.getElementById('roomNameInfo'),
   roomHostInfo: document.getElementById('roomHostInfo'),
   roomStatusInfo: document.getElementById('roomStatusInfo'),
   roomFirstInfo: document.getElementById('roomFirstInfo'),
   roomPlayers: document.getElementById('roomPlayers'),
+  roomHostSettings: document.getElementById('roomHostSettings'),
   readyBtn: document.getElementById('readyBtn'),
   leaveRoomBtn: document.getElementById('leaveRoomBtn'),
   setRoomTime: document.getElementById('setRoomTime'),
-  setRoomNoLimit: document.getElementById('setRoomNoLimit'),
-  saveRoomTimeBtn: document.getElementById('saveRoomTimeBtn'),
   board: document.getElementById('board'),
   gameStatus: document.getElementById('gameStatus'),
   lastMoveHint: document.getElementById('lastMoveHint'),
@@ -44,7 +42,6 @@ const els = {
   reselectModeLobbyBtn: document.getElementById('reselectModeLobbyBtn'),
   aiFirstTurn: document.getElementById('aiFirstTurn'),
   roomFirstTurn: document.getElementById('roomFirstTurn'),
-  saveFirstTurnBtn: document.getElementById('saveFirstTurnBtn'),
   undoAiBtn: document.getElementById('undoAiBtn'),
   resultModal: document.getElementById('resultModal'),
   resultMessage: document.getElementById('resultMessage'),
@@ -160,6 +157,7 @@ function goToView(view, pushHistory = true) {
   els.viewTitle.textContent = viewTitleMap[view];
   els.topBackBtn.classList.toggle('hidden', state.history.length === 0);
   updateChatVisibility();
+  updateGameActionButtons();
 }
 
 function updateChatVisibility() {
@@ -199,7 +197,6 @@ function resetIdentity() {
   hideResultModal();
   state.chatMessages = [];
   renderChatMessages();
-  syncLobbyTimeUi();
   goToView('register', false);
 }
 
@@ -276,8 +273,7 @@ function updateRoomUI() {
   els.roomFirstInfo.textContent = room.firstTurn === 'guest' ? '加入者先手' : '房主先手';
   syncRoomTimeUi(room);
   els.roomFirstTurn.value = room.firstTurn || 'host';
-  els.saveRoomTimeBtn.disabled = !isHost;
-  els.saveFirstTurnBtn.disabled = !isHost;
+  els.roomHostSettings.classList.toggle('hidden', !isHost);
 
   els.roomPlayers.innerHTML = '';
   room.players.forEach((p) => {
@@ -316,15 +312,7 @@ function appendChatMessage(message) {
 }
 
 function syncRoomTimeUi(room) {
-  const noLimit = !room.timeLimitSec;
-  els.setRoomNoLimit.checked = noLimit;
-  els.setRoomTime.disabled = noLimit;
-  els.setRoomTime.value = room.timeLimitSec || 300;
-}
-
-function syncLobbyTimeUi() {
-  const noLimit = els.roomNoLimit.checked;
-  els.roomTime.disabled = noLimit;
+  els.setRoomTime.value = String(room.timeLimitSec ?? 300);
 }
 
 function getTurnTag() {
@@ -582,6 +570,22 @@ function consumeAiTurnTime() {
   // AI 模式不使用倒數計時
 }
 
+function updateGameActionButtons() {
+  if (state.currentView !== 'game') return;
+  if (state.gameOver) {
+    els.surrenderBtn.classList.add('hidden');
+    els.undoAiBtn.classList.add('hidden');
+    return;
+  }
+
+  els.surrenderBtn.classList.remove('hidden');
+  if (state.gameType === 'ai') {
+    els.undoAiBtn.classList.remove('hidden');
+  } else {
+    els.undoAiBtn.classList.add('hidden');
+  }
+}
+
 function finishGameOnBoard(message, returnText) {
   state.gameOver = true;
   els.lastMoveHint.textContent = `${els.lastMoveHint.textContent}\n${message}`;
@@ -589,6 +593,7 @@ function finishGameOnBoard(message, returnText) {
   els.returnAfterGameBtn.classList.remove('hidden');
   showResultModal(message);
   updateGameStatus();
+  updateGameActionButtons();
 }
 
 function aiMove() {
@@ -673,11 +678,6 @@ els.reselectModeComputerBtn.addEventListener('click', reselectMode);
 els.reselectModeLobbyBtn.addEventListener('click', reselectMode);
 els.closeResultModalBtn.addEventListener('click', hideResultModal);
 els.undoAiBtn.addEventListener('click', undoAiMoves);
-els.roomNoLimit.addEventListener('change', syncLobbyTimeUi);
-els.setRoomNoLimit.addEventListener('change', () => {
-  els.setRoomTime.disabled = els.setRoomNoLimit.checked;
-});
-
 
 els.returnAfterGameBtn.addEventListener('click', () => {
   removeGameFromHistory();
@@ -728,6 +728,7 @@ els.startAiBtn.addEventListener('click', () => {
   els.lastMoveHint.textContent = state.aiFirstTurn === 'ai' ? '電腦先手（黑棋）' : '玩家先手（黑棋）';
   renderBoard(playerMoveAi);
   updateGameStatus();
+  updateGameActionButtons();
   if (state.aiFirstTurn === 'ai') {
     setTimeout(aiMove, 260);
   }
@@ -737,7 +738,7 @@ els.createRoomBtn.addEventListener('click', () => {
   socket.emit('room:create', {
     name: els.roomName.value,
     password: els.roomPassword.value,
-    timeLimitSec: els.roomNoLimit.checked ? 0 : Number(els.roomTime.value),
+    timeLimitSec: Number(els.roomTime.value),
     firstTurn: els.roomFirstTurn.value,
   }, (res) => {
     if (!res.ok) return alert(res.error);
@@ -760,13 +761,15 @@ els.leaveRoomBtn.addEventListener('click', () => {
   goToView('lobby');
 });
 
-els.saveRoomTimeBtn.addEventListener('click', () => {
-  socket.emit('room:set-time', els.setRoomNoLimit.checked ? 0 : Number(els.setRoomTime.value), (res) => {
-    if (!res.ok) alert(res.error);
+els.setRoomTime.addEventListener('change', () => {
+  if (!state.currentRoom || state.currentRoom.hostTag !== state.myTag) return;
+  socket.emit('room:set-time', Number(els.setRoomTime.value), (res) => {
+    if (!res?.ok) alert(res?.error || '設定思考時間失敗');
   });
 });
 
-els.saveFirstTurnBtn.addEventListener('click', () => {
+els.roomFirstTurn.addEventListener('change', () => {
+  if (!state.currentRoom || state.currentRoom.hostTag !== state.myTag) return;
   socket.emit('room:set-first-turn', els.roomFirstTurn.value, (res) => {
     if (!res?.ok) alert(res?.error || '設定先後手失敗');
   });
@@ -843,6 +846,7 @@ socket.on('game:started', ({ room, board, turn, colorByTag, remainingMs }) => {
   renderChatMessages();
   goToView('game');
   updateGameStatus();
+  updateGameActionButtons();
   els.lastMoveHint.textContent = '對局開始';
   renderBoard((x, y) => {
     socket.emit('game:move', { x, y }, (res) => {
@@ -901,6 +905,7 @@ socket.on('game:ended', ({ winnerTag, reason, loserTag, board, lastMove, room })
   els.returnAfterGameBtn.classList.remove('hidden');
   showResultModal(message);
   updateGameStatus();
+  updateGameActionButtons();
 });
 
 setInterval(() => {
@@ -908,5 +913,4 @@ setInterval(() => {
   updateGameStatus();
 }, 250);
 
-syncLobbyTimeUi();
 goToView('register', false);
